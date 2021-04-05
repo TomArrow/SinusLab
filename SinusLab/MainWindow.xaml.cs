@@ -27,7 +27,7 @@ namespace SinusLab
             InitializeComponent();
 
             //quickTest();
-            //imgTest2();
+            imgTest2();
             imgTest2_reverse();
 
             Close();
@@ -95,7 +95,7 @@ namespace SinusLab
 
                 hueTo0to1Range = ((double)tmpV.Z + Math.PI / 2) / Math.PI;
                 frequencyHere = lowerFrequency + frequencyRange * hueTo0to1Range; // Hue
-                phaseLengthHere = (double)samplerate/frequencyHere;
+                phaseLengthHere = ((double)samplerate)/frequencyHere/2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
                 output[i] = (double)tmpV.Y / 100.0 * maxAmplitude * Math.Sin(phaseHere*Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
@@ -113,19 +113,19 @@ namespace SinusLab
                 Array.Copy(tmp, 0, outputBytes, i * 4 *2 + 4, 4);
             }
 
-            File.WriteAllBytes("test-img3stereo2.raw",outputBytes);
+            File.WriteAllBytes("test-img3stereo5.raw",outputBytes);
 
         }
         private void imgTest2_reverse()
         {
-            byte[] sourceData = File.ReadAllBytes("test-img3stereo2.raw"); // 8 bit image
+            byte[] sourceData = File.ReadAllBytes("test-img3stereo5.raw"); // 8 bit image
             int samplerate = 48000;
 
             int lowerFrequency = 500;
             int upperFrequency = 20000;
             double frequencyRange = upperFrequency - lowerFrequency;
 
-            int windowSize = 64;
+            int windowSize = 16;
 
 
             double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
@@ -204,7 +204,7 @@ namespace SinusLab
                 output[i * 3+2] = (byte)Math.Min(255,Math.Max(0,tmpV.Z));
             }
 
-            File.WriteAllBytes("test-img3stereo2-backtoIMG4.raw",output);
+            File.WriteAllBytes("test-img3stereo2-backtoIMG9.raw",output);
         }
 
         private void imgTest()
