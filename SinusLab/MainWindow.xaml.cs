@@ -27,7 +27,7 @@ namespace SinusLab
             InitializeComponent();
 
             //quickTest();
-            //imgTest2();
+            imgTest2();
             imgTest2_reverse();
 
             Close();
@@ -94,7 +94,7 @@ namespace SinusLab
 
                 tmpV = Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
 
-                hueTo0to1Range = ((double)tmpV.Z + Math.PI / 2) / Math.PI;
+                hueTo0to1Range = ((double)tmpV.Z + Math.PI ) / Math.PI / 2;
                 frequencyHere = lowerFrequency + frequencyRange * hueTo0to1Range; // Hue
                 phaseLengthHere = ((double)samplerate)/frequencyHere/2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
@@ -114,12 +114,12 @@ namespace SinusLab
                 Array.Copy(tmp, 0, outputBytes, i * 4 *2 + 4, 4);
             }
 
-            File.WriteAllBytes("test-img4stereo6.raw",outputBytes);
+            File.WriteAllBytes("test-img4stereo6-pifix.raw",outputBytes);
 
         }
         private void imgTest2_reverse()
         {
-            byte[] sourceData = File.ReadAllBytes("stereo-input.raw"); // 8 bit image
+            byte[] sourceData = File.ReadAllBytes("test-img4stereo6-pifix.raw"); // 8 bit image
             int samplerate = 48000;
 
             int lowerFrequency = 500;
@@ -192,7 +192,8 @@ namespace SinusLab
 
                 }
 
-                hue = (((peakFrequencyHere-lowerFrequency)/frequencyRange)*Math.PI)-Math.PI/2;
+                //hue = (((peakFrequencyHere-lowerFrequency)/frequencyRange)*Math.PI)-Math.PI/2;
+                hue = (((peakFrequencyHere-lowerFrequency)/frequencyRange)*Math.PI*2)-Math.PI;
 
                 tmpV.X = (float)(decodeL[i]/2+0.5)*100;
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
@@ -210,7 +211,7 @@ namespace SinusLab
                 output[i * 3+2] = (byte)Math.Min(255,Math.Max(0,tmpV.Z));
             }
 
-            File.WriteAllBytes("test-img4stereo6-backtoIMG21.raw", output);
+            File.WriteAllBytes("test-img4stereo6-backtoIMG22-pifix.raw", output);
         }
 
         private void imgTest()
