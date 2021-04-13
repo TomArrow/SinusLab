@@ -23,10 +23,13 @@ namespace SinusLab
         FileStream fs;
         BinaryReader br;
 
+        byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] {0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
+
         struct ChunkInfo
         {
             public string name;
             public UInt64 size;
+            public bool isValidWave64LegacyRIFFCode;
         }
 
         public enum AudioFormat
@@ -60,9 +63,9 @@ namespace SinusLab
 
             wavFormat = detectWavFormat();
 
-            if(wavFormat != WavFormat.WAVE)
+            if(wavFormat != WavFormat.WAVE && wavFormat != WavFormat.WAVE64)
             {
-                throw new Exception("Only normal WAV is supported so far, not Wave64 or RF64 or anything else.");
+                throw new Exception("Only normal WAV and WAVE64 is supported so far, not RF64 or anything else.");
             }
 
             wavInfo = readWavInfo();
@@ -126,7 +129,7 @@ namespace SinusLab
                     case 8:
                         for(int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            retVal[i] = (double)((double)readBuffer[i] - 128.0)/(double)Math.Abs(sbyte.MinValue);
+                            retVal[i] = (double)((double)readBuffer[i] - 128.0)/Math.Abs((double)sbyte.MinValue);
                         }
                         break;
                     case 16:
@@ -134,7 +137,7 @@ namespace SinusLab
                         Buffer.BlockCopy(readBuffer,0,tmp0,0,wavInfo.bytesPerTick);
                         for (int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            retVal[i] = (double)((double)tmp0[i] / (double)Math.Abs(Int16.MinValue));
+                            retVal[i] = (double)((double)tmp0[i] / Math.Abs((double)Int16.MinValue));
                         }
                         break;
                     case 32:
@@ -152,21 +155,21 @@ namespace SinusLab
                             Buffer.BlockCopy(readBuffer, 0, tmp2, 0, wavInfo.bytesPerTick);
                             for (int i = 0; i < wavInfo.channelCount; i++)
                             {
-                                retVal[i] = (double)((double)tmp2[i] / (double)Math.Abs(Int32.MinValue));
+                                retVal[i] = (double)((double)tmp2[i] / Math.Abs((double)Int32.MinValue));
                             }
                         }
                         break;
                     // Test:
-                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0]
-                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0]
-                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0]
-                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0]
+                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0] // bad
+                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0] // bad
+                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0] //correctly scaled
+                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0] //correctly scaled
                     case 24: // Untested
                         Int32[] singleOne = new Int32[1] { 0 }; // We just interpret as Int32 and ignore one byte.
                         for (int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            Buffer.BlockCopy(readBuffer, 0, singleOne, 1, 3);
-                            retVal[i] = (double)((double)singleOne[0] / (double)Math.Abs(Int32.MinValue));
+                            Buffer.BlockCopy(readBuffer, i*3, singleOne, 1, 3);
+                            retVal[i] = (double)((double)singleOne[0] / Math.Abs((double)Int32.MinValue));
                         }
                         break;
                 }
@@ -201,8 +204,8 @@ namespace SinusLab
                     return WavFormat.WAVE;
                 } else 
                 {
-                    chunk = readChunk32(40);
-                    if (chunk.name == "FMT ")
+                    chunk = readChunkWave64(40);
+                    if (chunk.name == "FMT " && chunk.size == 16 && chunk.isValidWave64LegacyRIFFCode)
                     {
                         // Probably wave64? But need to properly read specification to make sure. Just based on hexeditor.
                         return WavFormat.WAVE64;
@@ -247,7 +250,33 @@ namespace SinusLab
                 retVal.dataOffset = resultPosition + 8;
                 retVal.dataLength = chunk.size;
 
-            } else
+            } else if (wavFormat == WavFormat.WAVE64)
+            {
+                br.BaseStream.Seek(64, SeekOrigin.Begin);
+                retVal.audioFormat = (AudioFormat)br.ReadUInt16();
+                retVal.channelCount = br.ReadUInt16();
+                retVal.sampleRate = br.ReadUInt32();
+                retVal.byteRate = br.ReadUInt32();
+                retVal.bytesPerTick = br.ReadUInt16();
+                retVal.bitsPerSample = br.ReadUInt16();
+
+
+                // find data chunk
+                ChunkInfo chunk = new ChunkInfo();
+                UInt64 currentPosition = 40;
+                UInt64 resultPosition;
+                do
+                {
+                    chunk = readChunkWave64(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
+                    resultPosition = currentPosition;
+                    currentPosition += 24 + chunk.size;
+
+                } while (chunk.name != "DATA" || !chunk.isValidWave64LegacyRIFFCode);
+
+                retVal.dataOffset = resultPosition + 24;
+                retVal.dataLength = chunk.size;
+            }
+            else
             {
                 // Not supported (yet)
             }
@@ -261,6 +290,17 @@ namespace SinusLab
             byte[] nameBytes = br.ReadBytes(4);
             retVal.name = Encoding.ASCII.GetString(nameBytes).ToUpper();
             retVal.size = br.ReadUInt32();
+            return retVal;
+        }
+        private ChunkInfo readChunkWave64(UInt64 position)
+        {
+            br.BaseStream.Seek((Int64)position,SeekOrigin.Begin);
+            ChunkInfo retVal = new ChunkInfo();
+            byte[] nameBytes = br.ReadBytes(4);
+            byte[] fourCC = br.ReadBytes(12);
+            retVal.isValidWave64LegacyRIFFCode = Helpers.EqualBytesLongUnrolled(fourCC, WAVE64_GUIDFOURCC_LAST12);
+            retVal.name = Encoding.ASCII.GetString(nameBytes).ToUpper();
+            retVal.size = br.ReadUInt64()-(UInt64)24U;
             return retVal;
         }
 

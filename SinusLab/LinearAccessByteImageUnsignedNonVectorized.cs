@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace SinusLab
 {
-    class LinearAccessByteImageUnsigned
+    class LinearAccessByteImageUnsignedNonVectorized
     {
         public byte[] imageData;
         public int stride;
@@ -17,7 +17,7 @@ namespace SinusLab
         public PixelFormat originalPixelFormat;
         public int originalStride;
 
-        public LinearAccessByteImageUnsigned(byte[] linearData, LinearAccessByteImageUnsignedHusk husk)
+        public LinearAccessByteImageUnsignedNonVectorized(byte[] linearData, LinearAccessByteImageUnsignedHusk husk)
         {
             stride = husk.stride;
             width = husk.width;
@@ -28,7 +28,7 @@ namespace SinusLab
             imageData = linearData;
         }
 
-        public LinearAccessByteImageUnsigned(byte[] imageDataA, int strideA, int widthA, int heightA, int channelMultiplier = 3)
+        public LinearAccessByteImageUnsignedNonVectorized(byte[] imageDataA, int strideA, int widthA, int heightA, int channelMultiplier = 3)
         {
             originalStride = strideA;
             width = widthA;
@@ -50,9 +50,9 @@ namespace SinusLab
             int vectorCountForMultiplication = Vector<short>.Count * 2;
 
             int pixelCount = width * height * 3;
-            int pixelCountDivisibleByVectorSize = (int)(vectorCountForMultiplication * Math.Ceiling((double)pixelCount / (double)vectorCountForMultiplication));
+            //int pixelCountDivisibleByVectorSize = (int)(vectorCountForMultiplication * Math.Ceiling((double)pixelCount / (double)vectorCountForMultiplication));
 
-            imageData = new byte[pixelCountDivisibleByVectorSize]; // We're not actually going to be using the extra pixels for anything useful, it's just to avoid memory overflow when reading from the array
+            imageData = new byte[pixelCount]; // We're not actually going to be using the extra pixels for anything useful, it's just to avoid memory overflow when reading from the array
 
             int strideHere, linearHere;
             for (int y = 0; y < height; y++)
@@ -71,7 +71,7 @@ namespace SinusLab
 
             //imageData = imageDataA;
         }
-        public LinearAccessByteImageUnsigned(byte[] imageDataA, int strideA, int widthA, int heightA, PixelFormat pixelFormatA)
+        public LinearAccessByteImageUnsignedNonVectorized(byte[] imageDataA, int strideA, int widthA, int heightA, PixelFormat pixelFormatA)
         {
             originalStride = strideA;
             width = widthA;
@@ -84,9 +84,9 @@ namespace SinusLab
             int vectorCountForMultiplication = Vector<short>.Count * 2;
 
             int pixelCount = width * height * 3;
-            int pixelCountDivisibleByVectorSize = (int)(vectorCountForMultiplication * Math.Ceiling((double)pixelCount / (double)vectorCountForMultiplication));
+            //int pixelCountDivisibleByVectorSize = (int)(vectorCountForMultiplication * Math.Ceiling((double)pixelCount / (double)vectorCountForMultiplication));
 
-            imageData = new byte[pixelCountDivisibleByVectorSize]; // We're not actually going to be using the extra pixels for anything useful, it's just to avoid memory overflow when reading from the array
+            imageData = new byte[pixelCount]; // We're not actually going to be using the extra pixels for anything useful, it's just to avoid memory overflow when reading from the array
 
             int channelMultiplier = 3;
             if (pixelFormatA == PixelFormat.Format32bppArgb)
@@ -179,7 +179,7 @@ namespace SinusLab
         public PixelFormat pixelFormat;
         public PixelFormat originalPixelFormat;
         public int originalStride;
-        public LinearAccessByteImageUnsignedHusk(LinearAccessByteImageUnsigned referenceImage)
+        public LinearAccessByteImageUnsignedHusk(LinearAccessByteImageUnsignedNonVectorized referenceImage)
         {
             stride = referenceImage.stride;
             width = referenceImage.width;
