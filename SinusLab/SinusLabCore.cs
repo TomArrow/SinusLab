@@ -139,7 +139,7 @@ namespace SinusLab
                 //hue = (((peakFrequencyHere-lowerFrequency)/frequencyRange)*Math.PI)-Math.PI/2;
                 hue = (((peakFrequencyHere - lowerFrequency) / frequencyRange) * Math.PI * 2) - Math.PI;
 
-                tmpV.X = (float)(decodeL[i] / 2 + 0.5) * 100;
+                tmpV.X = (float)(decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/0.707f*100f; //experimental * 4, normally doesnt beong there.

@@ -7,6 +7,19 @@
         mc:Ignorable="d"
         Title="SinusLab" Height="450" Width="800">
     <Grid>
-        
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition></ColumnDefinition>
+            <ColumnDefinition Width="200"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="1">
+            <GroupBox Header="Images">
+                <StackPanel>
+                    <Button x:Name="btnImageToRaw" Click="btnImageToRaw_Click">Image to .raw audio</Button>
+                    <Button x:Name="btnLoadReferenceImage" Click="btnLoadReferenceImage_Click">Load reference image</Button>
+                    <Button x:Name="btnRawToImage" Click="btnRawToImage_Click" IsEnabled="False">.raw audio to image</Button>
+                </StackPanel>
+            </GroupBox>
+        </StackPanel>
     </Grid>
 </Window>
