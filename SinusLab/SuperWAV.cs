@@ -232,7 +232,23 @@ namespace SinusLab
             WavInfo retVal = new WavInfo();
             if(wavFormat == WavFormat.WAVE)
             {
-                br.BaseStream.Seek(20,SeekOrigin.Begin);
+                
+
+                // find fmt chunk
+                ChunkInfo chunk = new ChunkInfo();
+                UInt64 currentPosition = 12;
+                UInt64 resultPosition;
+                do
+                {
+                    chunk = readChunk32(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
+                    resultPosition = currentPosition;
+                    currentPosition += 8 + chunk.size;
+
+                } while (chunk.name != "FMT ");
+
+                br.BaseStream.Seek((Int64)(resultPosition + (UInt64)8), SeekOrigin.Begin);
+
+
                 retVal.audioFormat = (AudioFormat)br.ReadUInt16();
                 retVal.channelCount = br.ReadUInt16();
                 retVal.sampleRate = br.ReadUInt32();
@@ -242,9 +258,7 @@ namespace SinusLab
 
 
                 // find data chunk
-                ChunkInfo chunk = new ChunkInfo();
-                UInt64 currentPosition = 36;
-                UInt64 resultPosition;
+                currentPosition = 12;
                 do
                 {
                     chunk = readChunk32(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
@@ -258,7 +272,21 @@ namespace SinusLab
 
             } else if (wavFormat == WavFormat.WAVE64) // Todo: respect 8 byte boundaries.
             {
-                br.BaseStream.Seek(64, SeekOrigin.Begin);
+                // find fmt chunk
+                ChunkInfo chunk = new ChunkInfo();
+                UInt64 currentPosition = 40;
+                UInt64 resultPosition;
+                do
+                {
+                    chunk = readChunkWave64(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
+                    resultPosition = currentPosition;
+                    currentPosition += 24 + chunk.size;
+
+                } while (chunk.name != "FMT " || !chunk.isValidWave64LegacyRIFFCode);
+
+                br.BaseStream.Seek((Int64)(resultPosition + (UInt64)24), SeekOrigin.Begin);
+
+                //br.BaseStream.Seek(64, SeekOrigin.Begin);
                 retVal.audioFormat = (AudioFormat)br.ReadUInt16();
                 retVal.channelCount = br.ReadUInt16();
                 retVal.sampleRate = br.ReadUInt32();
@@ -268,9 +296,7 @@ namespace SinusLab
 
 
                 // find data chunk
-                ChunkInfo chunk = new ChunkInfo();
-                UInt64 currentPosition = 40;
-                UInt64 resultPosition;
+                currentPosition = 40;
                 do
                 {
                     chunk = readChunkWave64(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
