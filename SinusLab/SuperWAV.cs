@@ -10,7 +10,7 @@ namespace SinusLab
     class SuperWAV
     {
 
-        enum WavFormat
+        public enum WavFormat
         {
             UNDEFINED_INVALID,
             WAVE,
@@ -22,6 +22,7 @@ namespace SinusLab
         bool writingAllowed = false;
         FileStream fs;
         BinaryReader br;
+        BinaryWriter bw;
 
         byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] {0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
         UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF,0xFF,0xFF,0xFF},0);
@@ -58,36 +59,135 @@ namespace SinusLab
         UInt16 bytesPerSample;
         UInt64 fileLengthInTicks;
 
+        public enum OpenMode
+        {
+            OPEN_FOR_READ,
+            CREATE_FOR_READ_WRITE,
+            CREATE_OR_OPEN_FOR_READ_WRITE
+        }
+
+        OpenMode openMode = OpenMode.OPEN_FOR_READ;
+
+        // Constructor for reading
         public SuperWAV(string path)
         {
+            openMode = OpenMode.OPEN_FOR_READ;
+
+
             fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             br = new BinaryReader(fs);
 
             wavFormat = detectWavFormat();
 
-            if(wavFormat != WavFormat.WAVE && wavFormat != WavFormat.WAVE64 && wavFormat != WavFormat.RF64)
+            if (wavFormat != WavFormat.WAVE && wavFormat != WavFormat.WAVE64 && wavFormat != WavFormat.RF64)
             {
                 throw new Exception("Only normal WAV and WAVE64 and RF64 is supported so far, not anything else.");
             }
 
             wavInfo = readWavInfo();
 
-            if(wavInfo.audioFormat != AudioFormat.UNCOMPRESSED && wavInfo.audioFormat != AudioFormat.FLOAT)
+            if (wavInfo.audioFormat != AudioFormat.UNCOMPRESSED && wavInfo.audioFormat != AudioFormat.FLOAT)
             {
                 throw new Exception("Only uncompressed WAV currently supported.");
             }
 
             // Sanity checks
-            if(wavInfo.bitsPerSample*wavInfo.channelCount/8 != wavInfo.bytesPerTick)
+            if (wavInfo.bitsPerSample * wavInfo.channelCount / 8 != wavInfo.bytesPerTick)
             {
                 throw new Exception("Uhm what?");
-            } else if (wavInfo.byteRate != wavInfo.sampleRate*wavInfo.bytesPerTick)
+            }
+            else if (wavInfo.byteRate != wavInfo.sampleRate * wavInfo.bytesPerTick)
             {
                 throw new Exception("Uhm what?");
             }
 
             bytesPerSample = (UInt16)(wavInfo.bitsPerSample / 8U);
             fileLengthInTicks = wavInfo.dataLength / wavInfo.bytesPerTick;
+            
+        }
+
+        // Constructor for writing
+        public SuperWAV(string path, WavFormat wavFormatForWritingA, UInt32 sampleRateA, UInt16 channelCountA, AudioFormat audioFormatA, UInt16 bitsPerSampleA,UInt64 initialDataLengthInTicks = 0)
+        {
+            openMode = OpenMode.CREATE_FOR_READ_WRITE;
+
+            fs = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read);
+            br = new BinaryReader(fs);
+            bw = new BinaryWriter(fs);
+
+            bytesPerSample = (UInt16)( bitsPerSampleA / 8);
+            fileLengthInTicks = initialDataLengthInTicks;
+
+            wavInfo.sampleRate = sampleRateA;
+            wavInfo.channelCount = channelCountA;
+            wavInfo.audioFormat = audioFormatA;
+            wavInfo.bitsPerSample = bitsPerSampleA;
+            wavInfo.bytesPerTick = (UInt16)(bytesPerSample * channelCountA);
+            wavInfo.dataLength = initialDataLengthInTicks* wavInfo.bytesPerTick;
+            wavInfo.byteRate = wavInfo.sampleRate * wavInfo.bytesPerTick;
+
+
+            writeFileHusk(wavFormatForWritingA,wavInfo);
+
+        }
+
+        public void checkAndIncreaseDataSize(UInt64 requiredDataSizeInTicks)
+        {
+            if(openMode == OpenMode.OPEN_FOR_READ)
+            {
+                throw new Exception("Trying to manipulate file that was opened for reading only!");
+            } else if (openMode == OpenMode.CREATE_OR_OPEN_FOR_READ_WRITE)
+            {
+                throw new Exception("Modifying existing files is not yet implemented.");
+            } else if (openMode == OpenMode.CREATE_FOR_READ_WRITE)
+            {
+
+            }
+        }
+
+        // Write the bare minimum for a working file.
+        public void writeFileHusk(WavFormat wavFormatA,WavInfo wavInfoA)
+        {
+            if(openMode == OpenMode.CREATE_FOR_READ_WRITE) { 
+
+                if(wavFormatA == WavFormat.WAVE)
+                {
+                    bw.Seek(0,SeekOrigin.Begin);
+                    bw.Write("RIFF".ToCharArray());
+                    bw.Write((UInt32)0);
+                    bw.Write("WAVE".ToCharArray());
+                    bw.Write("fmt ".ToCharArray());
+                    bw.Write((UInt32)16);
+                    bw.Write((UInt16)wavInfoA.audioFormat);
+                    bw.Write((UInt16)wavInfoA.channelCount);
+                    bw.Write((UInt32)wavInfoA.sampleRate);
+                    bw.Write((UInt32)wavInfoA.byteRate);
+                    bw.Write((UInt16)wavInfoA.bytesPerTick);
+                    bw.Write((UInt16)wavInfoA.bitsPerSample);
+                    bw.Write("data".ToCharArray());
+                    bw.Write((UInt32)wavInfoA.dataLength);
+                    bw.Seek((Int32)wavInfoA.dataLength-1, SeekOrigin.Current);
+                    bw.Write((byte)0);
+                    Int64 currentPosition = bw.BaseStream.Position;
+                    bw.Seek(4, SeekOrigin.Begin);
+                    bw.Write((UInt32)currentPosition);
+
+
+
+                } else if(wavFormat == WavFormat.WAVE64)
+                {
+                    throw new Exception("Writing Wave64 is not yet implemented");
+                } else if(wavFormat == WavFormat.RF64)
+                {
+                    throw new Exception("Writing RF64 is not yet implemented.");
+                } else
+                {
+                    throw new Exception("Whut? "+wavFormat+"? What do you mean by "+wavFormat+"?");
+                }
+            } else
+            {
+                throw new Exception("Trying to initialize an already existing file! Don't do that!");
+            }
         }
 
         // TODO Optimize this more and find out how I can return by ref

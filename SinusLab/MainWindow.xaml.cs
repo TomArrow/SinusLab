@@ -32,6 +32,7 @@ namespace SinusLab
         {
             InitializeComponent();
 
+            //new SuperWAV(@"test.wav",SuperWAV.WavFormat.WAVE,48000,2,SuperWAV.AudioFormat.FLOAT,32,48000);
         }
 
         LinearAccessByteImageUnsignedHusk referenceImageHusk = null;
