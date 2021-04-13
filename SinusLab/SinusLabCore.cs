@@ -10,12 +10,12 @@ namespace SinusLab
     class SinusLabCore
     {
 
-        int samplerate = 48000;
-        double maxAmplitude = Math.Sqrt(2.0) / 2.0;
-        int lowerFrequency = 500;
-        int upperFrequency = 20000;
+        public int samplerate = 48000;
+        public double maxAmplitude = Math.Sqrt(2.0) / 2.0;
+        public int lowerFrequency = 500;
+        public int upperFrequency = 20000;
 
-        int windowSize = 32;
+        public int windowSize = 32;
 
         public byte[] RGB24ToStereo(byte[] sourceData)
         {
