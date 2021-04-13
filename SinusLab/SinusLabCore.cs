@@ -66,6 +66,7 @@ namespace SinusLab
 
         }
 
+
         public byte[] StereoToRGB24(byte[] sourceData)
         {
             double frequencyRange = upperFrequency - lowerFrequency;

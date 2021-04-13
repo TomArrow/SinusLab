@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SinusLab
 {
-    class SuperWAV<T> where T:unmanaged
+    class SuperWAV
     {
 
         enum WavFormat
@@ -29,13 +29,13 @@ namespace SinusLab
             public UInt64 size;
         }
 
-        enum AudioFormat
+        public enum AudioFormat
         {
             UNCOMPRESSED = 1,
             FLOAT=3,
         }
 
-        struct WavInfo
+        public struct WavInfo
         {
             public UInt32 sampleRate;
             public UInt16 channelCount;
@@ -51,7 +51,7 @@ namespace SinusLab
 
         // Helper variables to speed up things
         UInt16 bytesPerSample;
-
+        UInt64 fileLengthInTicks;
 
         public SuperWAV(string path)
         {
@@ -67,7 +67,7 @@ namespace SinusLab
 
             wavInfo = readWavInfo();
 
-            if(wavInfo.audioFormat != AudioFormat.UNCOMPRESSED && wavInfo.audioFormat == AudioFormat.FLOAT)
+            if(wavInfo.audioFormat != AudioFormat.UNCOMPRESSED && wavInfo.audioFormat != AudioFormat.FLOAT)
             {
                 throw new Exception("Only uncompressed WAV currently supported.");
             }
@@ -82,16 +82,40 @@ namespace SinusLab
             }
 
             bytesPerSample = (UInt16)(wavInfo.bitsPerSample / 8U);
+            fileLengthInTicks = wavInfo.dataLength / wavInfo.bytesPerTick;
         }
 
-        public unsafe T[] this[UInt64 index]
+        // TODO Optimize this more and find out how I can return by ref
+        public float[] getEntireFileAs32BitFloat()
+        {
+            float[] retVal = new float[wavInfo.channelCount*fileLengthInTicks];
+            double[] tmp;
+            for (UInt64 i=0; i<fileLengthInTicks;i++)
+            {
+                tmp = this[i];
+                for(uint c = 0; c < wavInfo.channelCount; c++)
+                {
+
+                    retVal[i*wavInfo.channelCount+c] = (float)tmp[c];
+                }
+            }
+            return retVal;
+        }
+
+        public WavInfo getWavInfo()
+        {
+            return wavInfo;
+        }
+
+
+        // test: (UInt32)(((double)(UInt32.MaxValue - 2)/ (double)UInt32.MaxValue)*(double)UInt32.MaxValue)
+        public double[] this[UInt64 index]
         {
             get
             {
-                T[] retVal = new T[wavInfo.channelCount];
+                double[] retVal = new double[wavInfo.channelCount];
 
                 UInt64 baseOffset = wavInfo.dataOffset + index * wavInfo.bytesPerTick;
-                UInt64 offset;
                 byte[] readBuffer;
                 br.BaseStream.Seek((Int64)baseOffset, SeekOrigin.Begin);
 
@@ -102,22 +126,56 @@ namespace SinusLab
                     case 8:
                         for(int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            retVal[i] = (T)((Int16)readBuffer[i] - 128);
+                            retVal[i] = (double)((double)readBuffer[i] - 128.0)/(double)Math.Abs(sbyte.MinValue);
                         }
                         break;
                     case 16:
+                        Int16[] tmp0 = new Int16[wavInfo.channelCount];
+                        Buffer.BlockCopy(readBuffer,0,tmp0,0,wavInfo.bytesPerTick);
+                        for (int i = 0; i < wavInfo.channelCount; i++)
+                        {
+                            retVal[i] = (double)((double)tmp0[i] / (double)Math.Abs(Int16.MinValue));
+                        }
                         break;
                     case 32:
+                        if(wavInfo.audioFormat == AudioFormat.FLOAT)
+                        {
+                            float[] tmp1 = new float[wavInfo.channelCount];
+                            Buffer.BlockCopy(readBuffer, 0, tmp1, 0, wavInfo.bytesPerTick);
+                            for (int i = 0; i < wavInfo.channelCount; i++)
+                            {
+                                retVal[i] = (double)tmp1[i];
+                            }
+                        } else
+                        {
+                            Int32[] tmp2 = new Int32[wavInfo.channelCount];
+                            Buffer.BlockCopy(readBuffer, 0, tmp2, 0, wavInfo.bytesPerTick);
+                            for (int i = 0; i < wavInfo.channelCount; i++)
+                            {
+                                retVal[i] = (double)((double)tmp2[i] / (double)Math.Abs(Int32.MinValue));
+                            }
+                        }
                         break;
-                    case 24:
+                    // Test:
+                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0]
+                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,0,2); hah[0]
+                    // Int16[] abc = new Int16[1]{Int16.MaxValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0]
+                    // Int16[] abc = new Int16[1]{Int16.MinValue};Int32[] hah = new Int32[1]{0}; Buffer.BlockCopy(abc,0,hah,2,2); hah[0]
+                    case 24: // Untested
+                        Int32[] singleOne = new Int32[1] { 0 }; // We just interpret as Int32 and ignore one byte.
+                        for (int i = 0; i < wavInfo.channelCount; i++)
+                        {
+                            Buffer.BlockCopy(readBuffer, 0, singleOne, 1, 3);
+                            retVal[i] = (double)((double)singleOne[0] / (double)Math.Abs(Int32.MinValue));
+                        }
                         break;
                 }
-                for (uint i = 0; i < wavInfo.channelCount; i++)
+                /*for (uint i = 0; i < wavInfo.channelCount; i++)
                 {
                     offset = baseOffset + i * bytesPerSample;
                     readBuffer = br.ReadBytes(bytesPerSample);
                     
-                }
+                }*/
 
                 return retVal;
             }

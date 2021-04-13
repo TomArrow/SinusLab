@@ -74,6 +74,7 @@ namespace SinusLab
 
                     referenceImageHusk = byteImg.toHusk();
                     btnRawToImage.IsEnabled = true;
+                    btnWavToImage.IsEnabled = true;
 
                     byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
                 
@@ -139,6 +140,35 @@ namespace SinusLab
                 referenceImageHusk = byteImg.toHusk();
 
                 btnRawToImage.IsEnabled = true;
+                btnWavToImage.IsEnabled = true;
+            }
+        }
+
+        private void btnWavToImage_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Select wav file coresponding to the loaded reference image";
+
+            if (ofd.ShowDialog() == true)
+            {
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24.png";
+                if (sfd.ShowDialog() == true)
+                {
+                    byte[] srcDataByte;
+                    { 
+                        SuperWAV wavFile = new SuperWAV(ofd.FileName);
+                        float[] srcData = wavFile.getEntireFileAs32BitFloat();
+                        srcDataByte = new byte[srcData.Length*4];
+                        Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
+                    }
+
+                    byte[] output = core.StereoToRGB24(srcDataByte);
+                    LinearAccessByteImageUnsigned image = new LinearAccessByteImageUnsigned(output, referenceImageHusk);
+                    Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                    imgBitmap.Save(sfd.FileName);
+                    //File.WriteAllBytes(sfd.FileName, output);
+                }
             }
         }
 
