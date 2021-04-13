@@ -24,6 +24,7 @@ namespace SinusLab
         BinaryReader br;
 
         byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] {0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
+        UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF,0xFF,0xFF,0xFF},0);
 
         struct ChunkInfo
         {
@@ -36,6 +37,7 @@ namespace SinusLab
         {
             UNCOMPRESSED = 1,
             FLOAT=3,
+            RF64_FLOAT= 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
 
         public struct WavInfo
@@ -63,9 +65,9 @@ namespace SinusLab
 
             wavFormat = detectWavFormat();
 
-            if(wavFormat != WavFormat.WAVE && wavFormat != WavFormat.WAVE64)
+            if(wavFormat != WavFormat.WAVE && wavFormat != WavFormat.WAVE64 && wavFormat != WavFormat.RF64)
             {
-                throw new Exception("Only normal WAV and WAVE64 is supported so far, not RF64 or anything else.");
+                throw new Exception("Only normal WAV and WAVE64 and RF64 is supported so far, not anything else.");
             }
 
             wavInfo = readWavInfo();
@@ -213,8 +215,12 @@ namespace SinusLab
                 }
             } else if(chunk.name == "RF64")
             {
-                // RF64
-                return WavFormat.RF64;
+                chunk = readChunk32(12);
+                if (chunk.name == "DS64")
+                {
+                    // RF64
+                    return WavFormat.RF64;
+                }
             }
             
             // If nothing else returns something valid, we failed at detecting.
@@ -250,7 +256,7 @@ namespace SinusLab
                 retVal.dataOffset = resultPosition + 8;
                 retVal.dataLength = chunk.size;
 
-            } else if (wavFormat == WavFormat.WAVE64)
+            } else if (wavFormat == WavFormat.WAVE64) // Todo: respect 8 byte boundaries.
             {
                 br.BaseStream.Seek(64, SeekOrigin.Begin);
                 retVal.audioFormat = (AudioFormat)br.ReadUInt16();
@@ -275,6 +281,54 @@ namespace SinusLab
 
                 retVal.dataOffset = resultPosition + 24;
                 retVal.dataLength = chunk.size;
+            }
+            else if (wavFormat == WavFormat.RF64)
+            {
+                br.BaseStream.Seek(20, SeekOrigin.Begin);
+
+                UInt64 ds64_riffSize = br.ReadUInt64();
+                UInt64 ds64_dataSize = br.ReadUInt64();
+
+                // find fmt chunk
+                ChunkInfo chunk = new ChunkInfo();
+                UInt64 currentPosition = 12;
+                UInt64 resultPosition;
+                do
+                {
+                    chunk = readChunk32(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
+                    resultPosition = currentPosition;
+                    currentPosition += 8 + chunk.size;
+
+                } while (chunk.name != "FMT ");
+
+                br.BaseStream.Seek((Int64)(resultPosition+(UInt64)8), SeekOrigin.Begin);
+
+                // read fmt chunk data, as usual
+                retVal.audioFormat = (AudioFormat)br.ReadUInt16();
+                retVal.channelCount = br.ReadUInt16();
+                retVal.sampleRate = br.ReadUInt32();
+                retVal.byteRate = br.ReadUInt32();
+                retVal.bytesPerTick = br.ReadUInt16();
+                retVal.bitsPerSample = br.ReadUInt16();
+
+                if(retVal.audioFormat == AudioFormat.RF64_FLOAT) // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+                {
+                    retVal.audioFormat = AudioFormat.FLOAT;
+                }
+
+                // find data chunk
+                currentPosition = 12;
+                do
+                {
+                    chunk = readChunk32(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
+                    resultPosition = currentPosition;
+                    currentPosition += 8 + chunk.size;
+
+                } while (chunk.name != "DATA");
+
+                retVal.dataOffset = resultPosition + 8;
+                retVal.dataLength = chunk.size == RF64_MINUS1_VALUE ? ds64_dataSize : chunk.size; // According to specification, we must read the size from this chunk unless it's FFFFFFFF (or -1 if interpreted as signed Int32)
+
             }
             else
             {
