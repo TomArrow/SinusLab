@@ -27,7 +27,7 @@ namespace SinusLab
             InitializeComponent();
 
             //quickTest();
-            imgTest2();
+            //imgTest2();
             imgTest2_reverse();
 
             Close();
