@@ -296,7 +296,8 @@ namespace SinusLab
                                     float[] audioDataFloat = new float[audioData.Length / 4];
 
                                     Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
-                                    myWav.writeFloatArray(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
+                                    //myWav.writeFloatArray(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
+                                    myWav.writeFloatArrayFast(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
 
                                     /*if (currentFrame % 1000 == 0)
                                     {
