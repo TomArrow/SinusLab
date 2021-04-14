@@ -187,7 +187,7 @@ namespace SinusLab
             {
 
                 SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = ofd.FileName + ".sinuslab.2audio32fl.wav";
+                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm.wav";
                 if (sfd.ShowDialog() == true)
                 {
 
