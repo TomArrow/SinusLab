@@ -22,6 +22,13 @@
                     <Button x:Name="btnWavToImage" Click="btnWavToImage_Click" IsEnabled="False">.wav audio to image</Button>
                 </StackPanel>
             </GroupBox>
+            <GroupBox Header="Videos">
+                <StackPanel>
+                    <Button x:Name="btnVideoToW64" Click="btnVideoToW64_Click">Video to .w64 audio</Button>
+                    <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
+                    <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" IsEnabled="False">.w64 to video</Button>
+                </StackPanel>
+            </GroupBox>
         </StackPanel>
     </Grid>
 </Window>

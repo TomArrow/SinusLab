@@ -24,10 +24,10 @@ namespace SinusLab
         BinaryReader br;
         BinaryWriter bw;
 
-        byte[] WAVE64_GUIDFOURCC_RIFF_LAST12 = new byte[12] {0x2e, 0x91, 0xcf, 0x11, 0xa5, 0xd6, 0x28, 0xdb, 0x04, 0xc1, 0x00, 0x00 };
-        byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] {0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
+        byte[] WAVE64_GUIDFOURCC_RIFF_LAST12 = new byte[12] { 0x2e, 0x91, 0xcf, 0x11, 0xa5, 0xd6, 0x28, 0xdb, 0x04, 0xc1, 0x00, 0x00 };
+        byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] { 0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
         const UInt64 WAVE64_SIZE_DIFFERENCE = 24; // This is the size of the 128 bit fourcc code and the 64 bit size field that are part of the size parameter itself in Wave64
-        UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF,0xFF,0xFF,0xFF},0);
+        UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF, 0xFF, 0xFF, 0xFF }, 0);
 
         struct ChunkInfo
         {
@@ -39,8 +39,8 @@ namespace SinusLab
         public enum AudioFormat
         {
             LPCM = 1,
-            FLOAT=3,
-            RF64_FLOAT= 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+            FLOAT = 3,
+            RF64_FLOAT = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
 
         public struct WavInfo
@@ -60,6 +60,13 @@ namespace SinusLab
         // Helper variables to speed up things
         UInt16 bytesPerSample;
         UInt64 dataLengthInTicks;
+
+        public UInt64 DataLengthInTicks {
+            get
+            {
+                return dataLengthInTicks;
+            }
+        }
 
         public enum OpenMode
         {
@@ -159,7 +166,7 @@ namespace SinusLab
                         }
 
                         bw.BaseStream.Seek((Int64)wavInfo.dataOffset, SeekOrigin.Begin);
-                        bw.BaseStream.Seek((Int64)wavInfo.dataLength - 1,SeekOrigin.Current);
+                        bw.BaseStream.Seek((Int64)wavInfo.dataLength /*-1*/, SeekOrigin.Current);
                         bw.Write((byte)0);
                         Int64 currentPosition = bw.BaseStream.Position;
                         bw.Seek(4, SeekOrigin.Begin);
@@ -176,13 +183,14 @@ namespace SinusLab
                         wavInfo.dataLength = requiredDataSizeInTicks * wavInfo.bytesPerTick;
 
                         bw.BaseStream.Seek((Int64)wavInfo.dataOffset, SeekOrigin.Begin);
-                        bw.BaseStream.Seek((Int64)wavInfo.dataLength - 1, SeekOrigin.Current);
+                        bw.BaseStream.Seek((Int64)wavInfo.dataLength /*-1*/, SeekOrigin.Current);
                         bw.Write((byte)0);
                         Int64 currentPosition = bw.BaseStream.Position;
                         bw.Seek(4+12, SeekOrigin.Begin);
                         bw.Write((UInt64)currentPosition);
                         bw.BaseStream.Seek((Int64)wavInfo.dataOffset - (Int64)8, SeekOrigin.Begin);
                         bw.Write((UInt64)wavInfo.dataLength + WAVE64_SIZE_DIFFERENCE);
+                        dataLengthInTicks = requiredDataSizeInTicks;
                     }
                 }
                 else if (wavFormat == WavFormat.RF64)
@@ -221,7 +229,7 @@ namespace SinusLab
                     bw.Write("data".ToCharArray());
                     bw.Write((UInt32)wavInfoA.dataLength);
                     wavInfoA.dataOffset = (UInt64)bw.BaseStream.Position;
-                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength-1, SeekOrigin.Current);
+                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength/*-1*/, SeekOrigin.Current);
                     bw.Write((byte)0);
                     Int64 currentPosition = bw.BaseStream.Position;
                     bw.Seek(4, SeekOrigin.Begin);
@@ -252,7 +260,7 @@ namespace SinusLab
                     bw.Write(WAVE64_GUIDFOURCC_LAST12);
                     bw.Write((UInt64)wavInfoA.dataLength + WAVE64_SIZE_DIFFERENCE);
                     wavInfoA.dataOffset = (UInt64)bw.BaseStream.Position;
-                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength - 1, SeekOrigin.Current);
+                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength /*-1*/, SeekOrigin.Current);
                     bw.Write((byte)0);
                     Int64 currentPosition = bw.BaseStream.Position;
                     bw.Seek(4+12, SeekOrigin.Begin);
@@ -288,10 +296,32 @@ namespace SinusLab
             }
             return retVal;
         }
+        
+        // endIndex is inclusive
+        // TODO check bounds, not only here but in all getters
+        public float[] getAs32BitFloat(UInt64 startIndex, UInt64 endIndex)
+        {
+            checkClosed();
+
+            float[] retVal = new float[wavInfo.channelCount*(1+endIndex-startIndex)];
+            double[] tmp;
+            for (UInt64 i=0; i< (UInt64)retVal.Length; i++)
+            {
+                tmp = this[i+startIndex];
+                for(uint c = 0; c < wavInfo.channelCount; c++)
+                {
+
+                    retVal[i*wavInfo.channelCount+c] = (float)tmp[c];
+                }
+            }
+            return retVal;
+        }
 
         public void writeFloatArray(float [] dataToAdd, UInt64 offset=0)
         {
             checkClosed();
+
+            checkAndIncreaseDataSize((UInt64)dataToAdd.Length+offset);
 
             UInt64 dataToAddLengthInTicks = (UInt64)dataToAdd.Length / (UInt64)wavInfo.channelCount;
             double[] tmp = new double[wavInfo.channelCount];
@@ -301,7 +331,7 @@ namespace SinusLab
                 {
                     tmp[c] = dataToAdd[i * wavInfo.channelCount + c];
                 }
-                this[i] = tmp;
+                this[offset+i] = tmp;
             }
         }
 

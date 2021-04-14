@@ -71,7 +71,7 @@ namespace SinusLab
                         return;
                     }
 
-                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArray(loadedImage);
+                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(loadedImage);
 
                     referenceImageHusk = byteImg.toHusk();
                     btnRawToImage.IsEnabled = true;
@@ -135,7 +135,7 @@ namespace SinusLab
                     return;
                 }
 
-                LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArray(loadedImage);
+                LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(loadedImage);
 
                 referenceImageHusk = byteImg.toHusk();
 
@@ -204,7 +204,7 @@ namespace SinusLab
                         return;
                     }
 
-                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArray(loadedImage);
+                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(loadedImage);
 
                     referenceImageHusk = byteImg.toHusk();
                     btnRawToImage.IsEnabled = true;
@@ -224,6 +224,161 @@ namespace SinusLab
                     //File.WriteAllBytes(sfd.FileName, audioData);
                 }
             }
+        }
+
+        private void btnVideoToW64_Click(object sender, RoutedEventArgs e)
+        {
+            videoToW64();
+        }
+
+        Accord.Math.Rational videoFrameRate = 24;
+        LinearAccessByteImageUnsignedHusk videoReferenceFrame = null;
+
+        private void videoToW64()
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Select a video";
+
+            if (ofd.ShowDialog() == true)
+            {
+
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm.w64";
+                if (sfd.ShowDialog() == true)
+                {
+                    long frameCount;
+                    try
+                    {
+
+                        VideoFileReader reader = new VideoFileReader();
+                        reader.Open(ofd.FileName);
+
+                        /*
+                        Console.WriteLine("width:  " + reader.Width);
+                        Console.WriteLine("height: " + reader.Height);
+                        Console.WriteLine("fps:    " + reader.FrameRate);
+                        Console.WriteLine("codec:  " + reader.CodecName);
+                        Console.WriteLine("length:  " + reader.FrameCount);
+                        */
+
+                        frameCount = reader.FrameCount;
+
+                        UInt64 currentFrame = 0;
+
+                        //loadedVideo = new LinearAccessByteImage[frameCount];
+                        videoFrameRate = reader.FrameRate;
+
+
+                        using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, 48000, 2, SuperWAV.AudioFormat.LPCM, 16))
+                        {
+
+
+                            while (true)
+                            {
+                                using (Bitmap videoFrame = reader.ReadVideoFrame())
+                                {
+                                    if (videoFrame == null)
+                                        break;
+
+                                    LinearAccessByteImageUnsignedNonVectorized frameData = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(videoFrame);
+
+                                    if(videoReferenceFrame == null)
+                                    {
+
+                                        videoReferenceFrame = frameData.toHusk();
+                                        btnVideoToW64.IsEnabled = true;
+                                    }
+
+                                    byte[] audioData = core.RGB24ToStereo(frameData.imageData);
+
+                                    float[] audioDataFloat = new float[audioData.Length / 4];
+
+                                    Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
+                                    myWav.writeFloatArray(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
+
+                                    /*if (currentFrame % 1000 == 0)
+                                    {
+                                        progress.Report("Loading video: " + currentFrame + "/" + frameCount + " frames");
+                                    }*/
+
+
+                                    currentFrame++;
+                                    // process the frame here
+
+                                }
+                            }
+                        }
+
+                        reader.Close();
+
+                        // If the video delivered less frames than it promised (can happen for whatever reason) then we chip off the last parts of the array
+                        /*if (currentFrame < frameCount)
+                        {
+                            tooFewFramesDelivered = (int)frameCount - currentFrame;
+                            Array.Resize<LinearAccessByteImage>(ref loadedVideo, currentFrame);
+                        }*/
+
+                    }
+                    catch (Exception e)
+                    {
+                        //failed = true;
+                        MessageBox.Show(e.Message);
+                        videoReferenceFrame = null;
+                        btnVideoToW64.IsEnabled = false;
+                    }
+                    /*
+                    Bitmap loadedImage = new Bitmap(1, 1);
+
+                    try
+                    {
+                        loadedImage = (Bitmap)Bitmap.FromFile(ofd.FileName);
+                    }
+                    catch (Exception e)
+                    {
+                        MessageBox.Show("Error: " + e.Message);
+                        return;
+                    }
+
+                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArray(loadedImage);
+
+                    referenceImageHusk = byteImg.toHusk();
+                    btnRawToImage.IsEnabled = true;
+                    btnWavToImage.IsEnabled = true;
+
+                    byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
+
+                    float[] audioDataFloat = new float[audioData.Length / 4];
+
+                    Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
+
+                    using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length / 2))
+                    {
+                        myWav.writeFloatArray(audioDataFloat);
+                    }
+                    */
+                    //File.WriteAllBytes(sfd.FileName, audioData);
+                }
+            }
+        }
+
+        private void btnLoadReferenceVideo_Click(object sender, RoutedEventArgs e)
+        {
+            loadReferenceVideo();
+        }
+
+        private void loadReferenceVideo()
+        {
+
+        }
+
+        private void btnW64ToVideo_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideo();
+        }
+
+        private void w64ToVideo()
+        {
+
         }
     }
 }

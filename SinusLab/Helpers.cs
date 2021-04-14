@@ -184,7 +184,7 @@ namespace SinusLab
             return myBitmap;
 
         }
-        public static LinearAccessByteImageUnsignedNonVectorized BitmapToLinearAccessByteArray(Bitmap bmp)
+        public static LinearAccessByteImageUnsignedNonVectorized BitmapToLinearAccessByteArraUnsignedNonVectorizedy(Bitmap bmp)
         {
 
             // Lock the bitmap's bits.  
