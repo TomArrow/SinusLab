@@ -29,6 +29,11 @@ namespace SinusLab
         const UInt64 WAVE64_SIZE_DIFFERENCE = 24; // This is the size of the 128 bit fourcc code and the 64 bit size field that are part of the size parameter itself in Wave64
         UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF, 0xFF, 0xFF, 0xFF }, 0);
 
+        // Helpers for faster computation during format conversions:
+        double INT32_MINVAL_ABS_DOUBLE = Math.Abs((double)Int32.MinValue);
+        double INT16_MINVAL_ABS_DOUBLE = Math.Abs((double)Int16.MinValue);
+        double INT8_MINVAL_ABS_DOUBLE = Math.Abs((double)sbyte.MinValue);
+
         struct ChunkInfo
         {
             public string name;
@@ -299,6 +304,7 @@ namespace SinusLab
         
         // endIndex is inclusive
         // TODO check bounds, not only here but in all getters
+        // OBSOLETE. Use fast function instead. (soon)
         public float[] getAs32BitFloat(UInt64 startIndex, UInt64 endIndex)
         {
             checkClosed();
@@ -316,6 +322,72 @@ namespace SinusLab
                 }
             }
             return retVal;
+        }
+
+        // Use this instead of the overloaded [] operator if you need speed and need to get more than a single sample!
+        // Untested!
+        public float[] getAs32BitFloatFast(UInt64 startIndex, UInt64 endIndex)
+        {
+            checkClosed();
+
+            UInt64 ticksToServe = (1 + endIndex - startIndex);
+            float[] retVal = new float[wavInfo.channelCount * ticksToServe];
+
+            UInt64 bytesToServe = ticksToServe * wavInfo.bytesPerTick;
+            UInt64 firstByteToServe = startIndex * wavInfo.bytesPerTick;
+            UInt64 firstByteToServeAbsolute = firstByteToServe + wavInfo.dataOffset;
+
+            br.BaseStream.Seek((Int64)firstByteToServeAbsolute,SeekOrigin.Begin);
+            byte[] dataAsBytes = br.ReadBytes((int)bytesToServe);
+
+            UInt64 tmpNumber;
+
+            switch (wavInfo.bitsPerSample)
+            {
+                case 8: // UNTESTED
+                    for (UInt64 i = 0; i < bytesToServe; i++)
+                    {
+                        retVal[i] = (float)(((double)dataAsBytes[i] - 128.0) / INT8_MINVAL_ABS_DOUBLE);
+                    }
+                    break;
+                case 16: // TESTED
+                    Int16[] tmp0 = new Int16[bytesToServe/2];
+                    Buffer.BlockCopy(dataAsBytes, 0, tmp0, 0, (int)bytesToServe);
+                    tmpNumber = (UInt64)tmp0.Length;
+                    for (UInt64 i = 0; i < tmpNumber; i++)
+                    {
+                        retVal[i] = (float)((double)tmp0[i] / INT16_MINVAL_ABS_DOUBLE);
+                    }
+                    break;
+                case 32:// UNTESTED
+                    if (wavInfo.audioFormat == AudioFormat.FLOAT) // Most straightforward!
+                    {
+                        Buffer.BlockCopy(dataAsBytes, 0, retVal, 0, (int)bytesToServe); 
+                    }
+                    else
+                    { // UNTESTED
+                        Int32[] tmp1 = new Int32[bytesToServe / 4];
+                        Buffer.BlockCopy(dataAsBytes, 0, tmp1, 0, (int)bytesToServe);
+                        tmpNumber = (UInt64)tmp1.Length;
+                        for (UInt64 i = 0; i < tmpNumber; i++)
+                        {
+                            retVal[i] = (float)((double)tmp1[i] / INT32_MINVAL_ABS_DOUBLE);
+                        }
+                    }
+                    break;
+                case 24:// UNTESTED
+                    Int32[] singleOne = new Int32[1] { 0};
+                    tmpNumber = bytesToServe / 3;
+                    for (UInt64 i = 0; i < tmpNumber; i++)
+                    {
+                        Buffer.BlockCopy(dataAsBytes, (int)(i * 3), singleOne, 1, 3);
+                        retVal[i] = (float)((double)singleOne[0] / Math.Abs((double)Int32.MinValue));
+                    }
+                    break;
+            }
+
+            return retVal;
+
         }
 
         public void writeFloatArray(float [] dataToAdd, UInt64 offset=0)
@@ -365,7 +437,7 @@ namespace SinusLab
                     case 8:
                         for(int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            retVal[i] = (double)((double)readBuffer[i] - 128.0)/Math.Abs((double)sbyte.MinValue);
+                            retVal[i] = (double)(((double)readBuffer[i] - 128.0)/INT8_MINVAL_ABS_DOUBLE);
                         }
                         break;
                     case 16:
@@ -373,7 +445,7 @@ namespace SinusLab
                         Buffer.BlockCopy(readBuffer,0,tmp0,0,wavInfo.bytesPerTick);
                         for (int i = 0; i < wavInfo.channelCount; i++)
                         {
-                            retVal[i] = (double)((double)tmp0[i] / Math.Abs((double)Int16.MinValue));
+                            retVal[i] = (double)((double)tmp0[i] / INT16_MINVAL_ABS_DOUBLE);
                         }
                         break;
                     case 32:
@@ -391,7 +463,7 @@ namespace SinusLab
                             Buffer.BlockCopy(readBuffer, 0, tmp2, 0, wavInfo.bytesPerTick);
                             for (int i = 0; i < wavInfo.channelCount; i++)
                             {
-                                retVal[i] = (double)((double)tmp2[i] / Math.Abs((double)Int32.MinValue));
+                                retVal[i] = (double)((double)tmp2[i] / INT32_MINVAL_ABS_DOUBLE);
                             }
                         }
                         break;
@@ -405,7 +477,7 @@ namespace SinusLab
                         for (int i = 0; i < wavInfo.channelCount; i++)
                         {
                             Buffer.BlockCopy(readBuffer, i*3, singleOne, 1, 3);
-                            retVal[i] = (double)((double)singleOne[0] / Math.Abs((double)Int32.MinValue));
+                            retVal[i] = (double)((double)singleOne[0] / INT32_MINVAL_ABS_DOUBLE);
                         }
                         break;
                 }

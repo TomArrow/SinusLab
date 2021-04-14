@@ -469,13 +469,14 @@ namespace SinusLab
                             //int frameToWrite = 0;
                             for (UInt64 i = 0; i < frameCount; i++)
                             {
-                                srcData = wavFile.getAs32BitFloat(imageLength*i, imageLength*(i+1)-1); 
+                                //srcData = wavFile.getAs32BitFloat(imageLength*i, imageLength*(i+1)-1); 
+                                srcData = wavFile.getAs32BitFloatFast(imageLength*i, imageLength*(i+1)-1); 
                                 srcDataByte = new byte[srcData.Length * 4]; 
                                 Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                                 output = core.StereoToRGB24(srcDataByte);
                                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                                 imgBitmap = Helpers.ByteArrayToBitmap(image);
-                                writer.WriteVideoFrame(imgBitmap);
+                                writer.WriteVideoFrame(imgBitmap,(uint)i);
                                 writer.Flush();
                                 /*if (currentFrame % 1000 == 0)
                                 {
