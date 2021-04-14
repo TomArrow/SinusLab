@@ -38,7 +38,7 @@ namespace SinusLab
 
         public enum AudioFormat
         {
-            UNCOMPRESSED = 1,
+            LPCM = 1,
             FLOAT=3,
             RF64_FLOAT= 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
@@ -88,7 +88,7 @@ namespace SinusLab
 
             wavInfo = readWavInfo();
 
-            if (wavInfo.audioFormat != AudioFormat.UNCOMPRESSED && wavInfo.audioFormat != AudioFormat.FLOAT)
+            if (wavInfo.audioFormat != AudioFormat.LPCM && wavInfo.audioFormat != AudioFormat.FLOAT)
             {
                 throw new Exception("Only uncompressed WAV currently supported.");
             }
@@ -164,6 +164,7 @@ namespace SinusLab
                         bw.Write((UInt32)currentPosition-8);  // Check if -8 is actually correct
                         bw.BaseStream.Seek((Int64)wavInfo.dataOffset-(Int64)4, SeekOrigin.Begin);
                         bw.Write((UInt32)wavInfo.dataLength);
+                        dataLengthInTicks = requiredDataSizeInTicks;
                     }
                 }
                 else if (wavFormat == WavFormat.WAVE64)
@@ -195,7 +196,7 @@ namespace SinusLab
         }
 
         // Write the bare minimum for a working file.
-        public void writeFileHusk(WavFormat wavFormatA,ref WavInfo wavInfoA)
+        private void writeFileHusk(WavFormat wavFormatA,ref WavInfo wavInfoA)
         {
             if(openMode == OpenMode.CREATE_FOR_READ_WRITE) { 
 
@@ -282,6 +283,20 @@ namespace SinusLab
             return retVal;
         }
 
+        public void writeFloatArray(float [] dataToAdd, UInt64 offset=0)
+        {
+            UInt64 dataToAddLengthInTicks = (UInt64)dataToAdd.Length / (UInt64)wavInfo.channelCount;
+            double[] tmp = new double[wavInfo.channelCount];
+            for (UInt64 i = 0; i < dataToAddLengthInTicks; i++)
+            {
+                for (uint c = 0; c < wavInfo.channelCount; c++)
+                {
+                    tmp[c] = dataToAdd[i * wavInfo.channelCount + c];
+                }
+                this[i] = tmp;
+            }
+        }
+
         public WavInfo getWavInfo()
         {
             return wavInfo;
@@ -362,7 +377,77 @@ namespace SinusLab
 
             set
             {
-                throw new Exception("Writing not yet implemented");
+
+                if(value.Length != wavInfo.channelCount)
+                {
+                    throw new Exception("Data array supplied for writing does not match channel count.");
+                }
+                if (openMode == OpenMode.OPEN_FOR_READ)
+                {
+                    throw new Exception("Trying to edit file that was opened for reading only!");
+                }
+                else if (openMode == OpenMode.CREATE_OR_OPEN_FOR_READ_WRITE)
+                {
+                    throw new Exception("Modifying existing files is not yet implemented.");
+                }
+                else if (openMode == OpenMode.CREATE_FOR_READ_WRITE)
+                {
+                    UInt64 startOffset = index * wavInfo.bytesPerTick;
+                    //UInt64 endOffset = startOffset + wavInfo.bytesPerTick -1;
+                    checkAndIncreaseDataSize(index);
+                    UInt64 startOffsetAbsolute = wavInfo.dataOffset+ startOffset;
+
+                    byte[] dataToWrite = new byte[wavInfo.bytesPerTick];
+
+                    switch (wavInfo.bitsPerSample)
+                    {
+                        case 8:
+                            for(int i = 0; i < wavInfo.channelCount; i++)
+                            {
+                                dataToWrite[i] = (byte)(Math.Min(sbyte.MaxValue, Math.Max(sbyte.MinValue, value[i] * Math.Abs((double)sbyte.MinValue))) + 128.0);
+                            }
+                            break;
+                        case 16:
+                            Int16[] tmp0 = new Int16[wavInfo.channelCount];
+                            for (int i = 0; i < wavInfo.channelCount; i++)
+                            {
+                                tmp0[i] = (Int16)(Math.Min(Int16.MaxValue, Math.Max(Int16.MinValue, value[i] * Math.Abs((double)Int16.MinValue))));
+                            }
+                            Buffer.BlockCopy(tmp0,0,dataToWrite,0,dataToWrite.Length);
+                            break;
+                        case 32:
+                            if (wavInfo.audioFormat == AudioFormat.FLOAT)
+                            {
+                                float[] tmp1 = new float[wavInfo.channelCount];
+                                for (int i = 0; i < wavInfo.channelCount; i++)
+                                {
+                                    tmp1[i] = (float)value[i];
+                                }
+                                Buffer.BlockCopy(tmp1, 0, dataToWrite, 0, dataToWrite.Length);
+                            }
+                            else
+                            {
+                                Int32[] tmp2 = new Int32[wavInfo.channelCount];
+                                for (int i = 0; i < wavInfo.channelCount; i++)
+                                {
+                                    tmp2[i] = (Int32)(Math.Min(Int32.MaxValue, Math.Max(Int32.MinValue, value[i] * Math.Abs((double)Int32.MinValue))));
+                                }
+                                Buffer.BlockCopy(tmp2, 0, dataToWrite, 0, dataToWrite.Length);
+                            }
+                            break;
+                        case 24:
+                            Int32[] tmp3 = new Int32[1];
+                            for (int i = 0; i < wavInfo.channelCount; i++)
+                            {
+                                tmp3[0] = (Int32)(Math.Min(Int32.MaxValue, Math.Max(Int32.MinValue, value[i] * Math.Abs((double)Int32.MinValue))));
+                                Buffer.BlockCopy(tmp3, 1, dataToWrite, i*3, 3);
+                            }
+                            break;
+                    }
+
+                    bw.BaseStream.Seek((Int64)startOffsetAbsolute,SeekOrigin.Begin);
+                    bw.Write(dataToWrite);
+                }
             }
         }
 

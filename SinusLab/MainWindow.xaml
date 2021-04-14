@@ -16,6 +16,7 @@
             <GroupBox Header="Images">
                 <StackPanel>
                     <Button x:Name="btnImageToRaw" Click="btnImageToRaw_Click">Image to .raw audio</Button>
+                    <Button x:Name="btnImageToWav" Click="btnImageToWav_Click">Image to .wav audio</Button>
                     <Button x:Name="btnLoadReferenceImage" Click="btnLoadReferenceImage_Click">Load reference image</Button>
                     <Button x:Name="btnRawToImage" Click="btnRawToImage_Click" IsEnabled="False">.raw audio to image</Button>
                     <Button x:Name="btnWavToImage" Click="btnWavToImage_Click" IsEnabled="False">.wav audio to image</Button>

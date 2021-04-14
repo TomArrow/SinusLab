@@ -32,8 +32,11 @@ namespace SinusLab
         {
             InitializeComponent();
 
-            SuperWAV myWav = new SuperWAV(@"test.w64",SuperWAV.WavFormat.WAVE64,48000,2,SuperWAV.AudioFormat.FLOAT,32,48000);
+            /*SuperWAV myWav = new SuperWAV(@"test24pcm2.w64",SuperWAV.WavFormat.WAVE64,48000,2,SuperWAV.AudioFormat.LPCM,24,48000);
             myWav.checkAndIncreaseDataSize(96000);
+            myWav[0] = new double[2] { 0.5, 1.0 };
+            myWav[1] = new double[2] { 0.0, 0.0 };
+            myWav[2] = new double[2] { -0.5, -1.0};*/
         }
 
         LinearAccessByteImageUnsignedHusk referenceImageHusk = null;
@@ -168,7 +171,54 @@ namespace SinusLab
             }
         }
 
+        private void btnImageToWav_Click(object sender, RoutedEventArgs e)
+        {
+            imageToWav();
+        }
+
+        private void imageToWav()
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Select an RGB24 image";
+
+            if (ofd.ShowDialog() == true)
+            {
+
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = ofd.FileName + ".sinuslab.2audio32fl.wav";
+                if (sfd.ShowDialog() == true)
+                {
 
 
+                    Bitmap loadedImage = new Bitmap(1, 1);
+
+                    try
+                    {
+                        loadedImage = (Bitmap)Bitmap.FromFile(ofd.FileName);
+                    }
+                    catch (Exception e)
+                    {
+                        MessageBox.Show("Error: " + e.Message);
+                        return;
+                    }
+
+                    LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArray(loadedImage);
+
+                    referenceImageHusk = byteImg.toHusk();
+                    btnRawToImage.IsEnabled = true;
+                    btnWavToImage.IsEnabled = true;
+
+                    byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
+
+                    float[] audioDataFloat = new float[audioData.Length / 4];
+
+                    Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
+
+                    SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length/2);
+                    myWav.writeFloatArray(audioDataFloat);
+                    //File.WriteAllBytes(sfd.FileName, audioData);
+                }
+            }
+        }
     }
 }
