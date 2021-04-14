@@ -20,6 +20,7 @@
                     <Button x:Name="btnLoadReferenceImage" Click="btnLoadReferenceImage_Click">Load reference image</Button>
                     <Button x:Name="btnRawToImage" Click="btnRawToImage_Click" IsEnabled="False">.raw audio to image</Button>
                     <Button x:Name="btnWavToImage" Click="btnWavToImage_Click" IsEnabled="False">.wav audio to image</Button>
+                    <Button x:Name="btnWavToImageFast" Click="btnWavToImageFast_Click" IsEnabled="False">.wav audio to image (fast)</Button>
                 </StackPanel>
             </GroupBox>
             <GroupBox Header="Videos">
@@ -27,6 +28,7 @@
                     <Button x:Name="btnVideoToW64" Click="btnVideoToW64_Click">Video to .w64 audio</Button>
                     <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
                     <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" IsEnabled="False">.w64 to video</Button>
+                    <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click" IsEnabled="False">.w64 to video (fast)</Button>
                 </StackPanel>
             </GroupBox>
         </StackPanel>

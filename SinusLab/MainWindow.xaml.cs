@@ -76,6 +76,7 @@ namespace SinusLab
                     referenceImageHusk = byteImg.toHusk();
                     btnRawToImage.IsEnabled = true;
                     btnWavToImage.IsEnabled = true;
+                    btnWavToImageFast.IsEnabled = true;
 
                     byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
                 
@@ -141,10 +142,16 @@ namespace SinusLab
 
                 btnRawToImage.IsEnabled = true;
                 btnWavToImage.IsEnabled = true;
+                btnWavToImageFast.IsEnabled = true;
             }
         }
 
         private void btnWavToImage_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage();
+        }
+        
+        private void wavToImage(bool fast = false)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select wav file coresponding to the loaded reference image";
@@ -156,16 +163,17 @@ namespace SinusLab
                 if (sfd.ShowDialog() == true)
                 {
                     byte[] srcDataByte;
-                    
+
                     using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
                     {
-                        float[] srcData = wavFile.getEntireFileAs32BitFloat();
+                        //float[] srcData = wavFile.getEntireFileAs32BitFloat();
+                        float[] srcData = wavFile.getAs32BitFloatFast(0,(UInt64)referenceImageHusk.width* (UInt64)referenceImageHusk.height);
                         srcDataByte = new byte[srcData.Length * 4];
                         Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                     }
-                            
 
-                    byte[] output = core.StereoToRGB24(srcDataByte);
+
+                    byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
                     LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, referenceImageHusk);
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                     imgBitmap.Save(sfd.FileName);
@@ -209,6 +217,7 @@ namespace SinusLab
                     referenceImageHusk = byteImg.toHusk();
                     btnRawToImage.IsEnabled = true;
                     btnWavToImage.IsEnabled = true;
+                    btnWavToImageFast.IsEnabled = true;
 
                     byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
 
@@ -273,6 +282,7 @@ namespace SinusLab
 
                         videoReferenceFrame = null;
                         btnW64ToVideo.IsEnabled = false;
+                        btnW64ToVideoFast.IsEnabled = false;
 
                         using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, 48000, 2, SuperWAV.AudioFormat.LPCM, 16))
                         {
@@ -292,6 +302,7 @@ namespace SinusLab
 
                                         videoReferenceFrame = frameData.toHusk();
                                         btnW64ToVideo.IsEnabled = true;
+                                        btnW64ToVideoFast.IsEnabled = true;
                                     }
 
                                     byte[] audioData = core.RGB24ToStereo(frameData.imageData);
@@ -331,6 +342,7 @@ namespace SinusLab
                         MessageBox.Show(e.Message);
                         videoReferenceFrame = null;
                         btnW64ToVideo.IsEnabled = false;
+                        btnW64ToVideoFast.IsEnabled = false;
                     }
 #endif
                 }
@@ -382,6 +394,7 @@ namespace SinusLab
 
                         videoReferenceFrame = frameData.toHusk();
                         btnW64ToVideo.IsEnabled = true;
+                        btnW64ToVideoFast.IsEnabled = true;
 
                         /*if (currentFrame % 1000 == 0)
                         {
@@ -409,6 +422,7 @@ namespace SinusLab
                     MessageBox.Show(e.Message);
                     videoReferenceFrame = null;
                     btnW64ToVideo.IsEnabled = false;
+                    btnW64ToVideoFast.IsEnabled = false;
                 }
                 
             }
@@ -419,7 +433,7 @@ namespace SinusLab
             w64ToVideo();
         }
 
-        private void w64ToVideo()
+        private void w64ToVideo(bool fast = false)
         {
             if(videoReferenceFrame == null)
             {
@@ -478,7 +492,7 @@ namespace SinusLab
                                 srcData = wavFile.getAs32BitFloatFast(imageLength*i, imageLength*(i+1)-1); 
                                 srcDataByte = new byte[srcData.Length * 4]; 
                                 Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
-                                output = core.StereoToRGB24(srcDataByte);
+                                output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
                                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                                 imgBitmap = Helpers.ByteArrayToBitmap(image);
                                 writer.WriteVideoFrame(imgBitmap,(uint)i);
@@ -501,6 +515,16 @@ namespace SinusLab
                    
                 }
             }
+        }
+
+        private void btnW64ToVideoFast_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideo(true);
+        }
+
+        private void btnWavToImageFast_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(true);
         }
     }
 }

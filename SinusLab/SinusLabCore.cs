@@ -158,6 +158,151 @@ namespace SinusLab
 
             return output;
         }
+        
+        public byte[] StereoToRGB24Fast(byte[] sourceData,double fftSampleRateInRelationToWindowSize = 0.5)
+        {
+            double frequencyRange = upperFrequency - lowerFrequency;
+
+            uint fftSamplingDistance=  (uint)Math.Floor(fftSampleRateInRelationToWindowSize * (double)windowSize);
+
+            double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decodeL = new double[sourceData.Length / 8];
+
+            for (int i = 0; i < decodeL.Length; i++)
+            {
+                decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
+                decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+            }
+
+            double[] audioPart = new double[windowSize];
+
+            double[] freqs;
+
+            //double[] c = new double[decodeL.Length];
+            //double[] h = new double[decodeL.Length];
+
+            byte[] output = new byte[decodeL.Length * 3];
+
+
+            double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
+            freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+
+            double tmpMaxIntensity = 0;
+            int tmpMaxIntensityIndex = 0;
+
+            double peakFrequencyHere = 0;
+            double hue = 0;
+
+            Vector3 tmpV;
+
+            // fftMagnitudeInterpolateHere will be interpolated from fftMagniLast and fftMagnitudeNext
+            double[] fftMagnitudeLast = null;
+            uint fftMagnitudeLastIndex = 0;
+            double[] fftMagnitudeNext = null;
+            uint fftMagnitudeNextIndex = fftSamplingDistance;
+            //double[] fftMagnitude = new double[freqs.Length];
+
+            bool reachedNextInterpolationStep = false;
+
+            // decode c,h components
+            for (uint i = 0; i < decodeL.Length; i++)
+            {
+                reachedNextInterpolationStep = i % fftSamplingDistance == 0 && i != 0; // If i%fftSamplingDistance is 0, that means for example that with a sampling distance of 10, we have now reached number 10. Thus next must be moved into last and next recalculated. But this does not apply if we're still at index 0 obviously.
+                fftMagnitudeLastIndex = i/fftSamplingDistance*fftSamplingDistance; // This relies on C# behavior that integer division will always round the result down! If porting to other language, take note.
+                fftMagnitudeNextIndex = (uint)Math.Min(decodeL.Length-1,fftMagnitudeLastIndex+fftSamplingDistance);
+                if (reachedNextInterpolationStep)
+                {
+                    fftMagnitudeLast = (double[])fftMagnitudeNext.Clone();
+                    fftMagnitudeNext = null;
+                }
+                if (fftMagnitudeLast == null)
+                {
+                    Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSize);
+                    double[] window = FftSharp.Window.Hanning(audioPart.Length);
+                    FftSharp.Window.ApplyInPlace(window, audioPart);
+                    fftMagnitudeLast = FftSharp.Transform.FFTmagnitude(audioPart);
+                }
+                if (fftMagnitudeNext == null)
+                {
+                    Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSize);
+                    double[] window = FftSharp.Window.Hanning(audioPart.Length);
+                    FftSharp.Window.ApplyInPlace(window, audioPart);
+                    fftMagnitudeNext = FftSharp.Transform.FFTmagnitude(audioPart);
+                }
+
+                // Now interpolate
+                uint distanceToLast = i - fftMagnitudeLastIndex;
+                uint distanceToNext = fftMagnitudeNextIndex -i;
+                if(distanceToLast == 0)
+                {
+                    fftMagnitude = (double[])fftMagnitudeLast.Clone();
+                } else if(distanceToNext == 0)
+                {
+                    fftMagnitude = (double[])fftMagnitudeNext.Clone();
+                } else
+                {
+                    uint totalDistance = distanceToLast + distanceToNext;
+                    double lastRatio = (double)distanceToNext / (double)totalDistance;
+                    double nextRatio = (double)distanceToLast / (double)totalDistance;
+                    fftMagnitude = new double[freqs.Length];
+                    for(uint b = 0; b < freqs.Length; b++)
+                    {
+                        fftMagnitude[b] = lastRatio * fftMagnitudeLast[b] + nextRatio * fftMagnitudeNext[b];
+                    }
+                }
+
+                /*Array.Copy(decode, i, audioPart, 0, windowSize);
+                double[] window = FftSharp.Window.Hanning(audioPart.Length);
+                FftSharp.Window.ApplyInPlace(window, audioPart);
+                fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);*/
+
+                tmpMaxIntensity = 0;
+                // find biggest frequency
+                for (int b = 0; b < freqs.Length; b++)
+                {
+                    if (fftMagnitude[b] > tmpMaxIntensity)
+                    {
+                        tmpMaxIntensity = fftMagnitude[b];
+                        tmpMaxIntensityIndex = b;
+                    }
+                }
+
+
+                if (tmpMaxIntensityIndex == 0)
+                {
+                    peakFrequencyHere = (freqs[0] * fftMagnitude[0] + freqs[1] * fftMagnitude[1]) / (fftMagnitude[0] + fftMagnitude[1]);
+                }
+                else if (tmpMaxIntensityIndex == freqs.Length - 1)
+                {
+                    peakFrequencyHere = (freqs[freqs.Length - 1] * fftMagnitude[freqs.Length - 1] + freqs[freqs.Length - 2] * fftMagnitude[freqs.Length - 2]) / (fftMagnitude[freqs.Length - 1] + fftMagnitude[freqs.Length - 2]);
+                }
+                else
+                {
+                    peakFrequencyHere = (freqs[tmpMaxIntensityIndex - 1] * fftMagnitude[tmpMaxIntensityIndex - 1] + freqs[tmpMaxIntensityIndex] * fftMagnitude[tmpMaxIntensityIndex] + freqs[tmpMaxIntensityIndex + 1] * fftMagnitude[tmpMaxIntensityIndex + 1]) / (fftMagnitude[tmpMaxIntensityIndex - 1] + fftMagnitude[tmpMaxIntensityIndex] + fftMagnitude[tmpMaxIntensityIndex + 1]);
+
+                }
+
+                //hue = (((peakFrequencyHere-lowerFrequency)/frequencyRange)*Math.PI)-Math.PI/2;
+                hue = (((peakFrequencyHere - lowerFrequency) / frequencyRange) * Math.PI * 2) - Math.PI;
+
+                tmpV.X = (float)(decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
+                //tmpV.Y = (float)tmpMaxIntensity*100; //experimental * 4, normally doesnt beong there.
+                //tmpV.Y = (float)tmpMaxIntensity/0.707f*100f; //experimental * 4, normally doesnt beong there.
+                tmpV.Y = (float)tmpMaxIntensity / (0.637f / 2f) * 100f; //experimental * 4, normally doesnt beong there.
+                //tmpV.Y = (float)tmpMaxIntensity/ (0.707f / 2f) * 100f; //experimental * 4, normally doesnt beong there.
+                //tmpV.Y = (float)tmpMaxIntensity/ (0.637f * 0.637f) * 100f; //experimental * 4, normally doesnt beong there.
+                tmpV.Z = (float)hue;
+
+                tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+            }
+
+            return output;
+        }
 
     }
 }

@@ -284,6 +284,7 @@ namespace SinusLab
         }
 
         // TODO Optimize this more and find out how I can return by ref
+        [Obsolete("Slow and won't work for giant files. Use getAs32BitFloatFast instead.")]
         public float[] getEntireFileAs32BitFloat()
         {
             checkClosed();
