@@ -218,7 +218,8 @@ namespace SinusLab
 
                     using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length / 2))
                     {
-                        myWav.writeFloatArray(audioDataFloat);
+                        //myWav.writeFloatArray(audioDataFloat);
+                        myWav.writeFloatArrayFast(audioDataFloat);
                     }
                         
                     //File.WriteAllBytes(sfd.FileName, audioData);

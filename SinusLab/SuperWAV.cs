@@ -19,7 +19,7 @@ namespace SinusLab
         }
 
         WavFormat wavFormat = WavFormat.UNDEFINED_INVALID;
-        bool writingAllowed = false;
+        //bool writingAllowed = false;
         FileStream fs;
         BinaryReader br;
         BinaryWriter bw;
