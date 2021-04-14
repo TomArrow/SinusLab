@@ -24,7 +24,9 @@ namespace SinusLab
         BinaryReader br;
         BinaryWriter bw;
 
+        byte[] WAVE64_GUIDFOURCC_RIFF_LAST12 = new byte[12] {0x2e, 0x91, 0xcf, 0x11, 0xa5, 0xd6, 0x28, 0xdb, 0x04, 0xc1, 0x00, 0x00 };
         byte[] WAVE64_GUIDFOURCC_LAST12 = new byte[12] {0xf3, 0xac, 0xd3, 0x11, 0x8c, 0xd1, 0x00, 0xc0, 0x4f, 0x8e, 0xdb, 0x8a };
+        const UInt64 WAVE64_SIZE_DIFFERENCE = 24; // This is the size of the 128 bit fourcc code and the 64 bit size field that are part of the size parameter itself in Wave64
         UInt32 RF64_MINUS1_VALUE = BitConverter.ToUInt32(new byte[4] { 0xFF,0xFF,0xFF,0xFF},0);
 
         struct ChunkInfo
@@ -57,7 +59,7 @@ namespace SinusLab
 
         // Helper variables to speed up things
         UInt16 bytesPerSample;
-        UInt64 fileLengthInTicks;
+        UInt64 dataLengthInTicks;
 
         public enum OpenMode
         {
@@ -102,7 +104,7 @@ namespace SinusLab
             }
 
             bytesPerSample = (UInt16)(wavInfo.bitsPerSample / 8U);
-            fileLengthInTicks = wavInfo.dataLength / wavInfo.bytesPerTick;
+            dataLengthInTicks = wavInfo.dataLength / wavInfo.bytesPerTick;
             
         }
 
@@ -116,7 +118,7 @@ namespace SinusLab
             bw = new BinaryWriter(fs);
 
             bytesPerSample = (UInt16)( bitsPerSampleA / 8);
-            fileLengthInTicks = initialDataLengthInTicks;
+            dataLengthInTicks = initialDataLengthInTicks;
 
             wavInfo.sampleRate = sampleRateA;
             wavInfo.channelCount = channelCountA;
@@ -126,11 +128,13 @@ namespace SinusLab
             wavInfo.dataLength = initialDataLengthInTicks* wavInfo.bytesPerTick;
             wavInfo.byteRate = wavInfo.sampleRate * wavInfo.bytesPerTick;
 
+            wavFormat = wavFormatForWritingA;
 
-            writeFileHusk(wavFormatForWritingA,wavInfo);
+            writeFileHusk(wavFormatForWritingA,ref wavInfo);
 
         }
 
+        // Increase size of data chunk if necessary.
         public void checkAndIncreaseDataSize(UInt64 requiredDataSizeInTicks)
         {
             if(openMode == OpenMode.OPEN_FOR_READ)
@@ -141,12 +145,57 @@ namespace SinusLab
                 throw new Exception("Modifying existing files is not yet implemented.");
             } else if (openMode == OpenMode.CREATE_FOR_READ_WRITE)
             {
+                if(wavFormat == WavFormat.WAVE)
+                {
+                    if (requiredDataSizeInTicks > dataLengthInTicks)
+                    {
+                        wavInfo.dataLength = requiredDataSizeInTicks * wavInfo.bytesPerTick;
+
+                        if(wavInfo.dataLength > UInt32.MaxValue)
+                        {
+                            throw new Exception("Trying to allocate more than 4GB of data in traditional wav file.");
+                        }
+
+                        bw.BaseStream.Seek((Int64)wavInfo.dataOffset, SeekOrigin.Begin);
+                        bw.BaseStream.Seek((Int64)wavInfo.dataLength - 1,SeekOrigin.Current);
+                        bw.Write((byte)0);
+                        Int64 currentPosition = bw.BaseStream.Position;
+                        bw.Seek(4, SeekOrigin.Begin);
+                        bw.Write((UInt32)currentPosition-8);  // Check if -8 is actually correct
+                        bw.BaseStream.Seek((Int64)wavInfo.dataOffset-(Int64)4, SeekOrigin.Begin);
+                        bw.Write((UInt32)wavInfo.dataLength);
+                    }
+                }
+                else if (wavFormat == WavFormat.WAVE64)
+                {
+                    if (requiredDataSizeInTicks > dataLengthInTicks)
+                    {
+                        wavInfo.dataLength = requiredDataSizeInTicks * wavInfo.bytesPerTick;
+
+                        bw.BaseStream.Seek((Int64)wavInfo.dataOffset, SeekOrigin.Begin);
+                        bw.BaseStream.Seek((Int64)wavInfo.dataLength - 1, SeekOrigin.Current);
+                        bw.Write((byte)0);
+                        Int64 currentPosition = bw.BaseStream.Position;
+                        bw.Seek(4+12, SeekOrigin.Begin);
+                        bw.Write((UInt64)currentPosition);
+                        bw.BaseStream.Seek((Int64)wavInfo.dataOffset - (Int64)8, SeekOrigin.Begin);
+                        bw.Write((UInt64)wavInfo.dataLength + WAVE64_SIZE_DIFFERENCE);
+                    }
+                }
+                else if (wavFormat == WavFormat.RF64)
+                {
+                    throw new Exception("Writing RF64 is not yet implemented.");
+                }
+                else
+                {
+                    throw new Exception("Whut? " + wavFormat + "? What do you mean by " + wavFormat + "?");
+                }
 
             }
         }
 
         // Write the bare minimum for a working file.
-        public void writeFileHusk(WavFormat wavFormatA,WavInfo wavInfoA)
+        public void writeFileHusk(WavFormat wavFormatA,ref WavInfo wavInfoA)
         {
             if(openMode == OpenMode.CREATE_FOR_READ_WRITE) { 
 
@@ -166,17 +215,43 @@ namespace SinusLab
                     bw.Write((UInt16)wavInfoA.bitsPerSample);
                     bw.Write("data".ToCharArray());
                     bw.Write((UInt32)wavInfoA.dataLength);
-                    bw.Seek((Int32)wavInfoA.dataLength-1, SeekOrigin.Current);
+                    wavInfoA.dataOffset = (UInt64)bw.BaseStream.Position;
+                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength-1, SeekOrigin.Current);
                     bw.Write((byte)0);
                     Int64 currentPosition = bw.BaseStream.Position;
                     bw.Seek(4, SeekOrigin.Begin);
-                    bw.Write((UInt32)currentPosition);
+                    bw.Write((UInt32)currentPosition-8); // Check if -8 is actually correct
 
 
 
                 } else if(wavFormat == WavFormat.WAVE64)
                 {
-                    throw new Exception("Writing Wave64 is not yet implemented");
+
+
+                    bw.Seek(0, SeekOrigin.Begin);
+                    bw.Write("riff".ToCharArray());
+                    bw.Write(WAVE64_GUIDFOURCC_RIFF_LAST12);
+                    bw.Write((UInt64)0);
+                    bw.Write("wave".ToCharArray());
+                    bw.Write(WAVE64_GUIDFOURCC_LAST12);
+                    bw.Write("fmt ".ToCharArray());
+                    bw.Write(WAVE64_GUIDFOURCC_LAST12);
+                    bw.Write((UInt64)(16+ WAVE64_SIZE_DIFFERENCE));
+                    bw.Write((UInt16)wavInfoA.audioFormat);
+                    bw.Write((UInt16)wavInfoA.channelCount);
+                    bw.Write((UInt32)wavInfoA.sampleRate);
+                    bw.Write((UInt32)wavInfoA.byteRate);
+                    bw.Write((UInt16)wavInfoA.bytesPerTick);
+                    bw.Write((UInt16)wavInfoA.bitsPerSample);
+                    bw.Write("data".ToCharArray());
+                    bw.Write(WAVE64_GUIDFOURCC_LAST12);
+                    bw.Write((UInt64)wavInfoA.dataLength + WAVE64_SIZE_DIFFERENCE);
+                    wavInfoA.dataOffset = (UInt64)bw.BaseStream.Position;
+                    bw.BaseStream.Seek((Int64)wavInfoA.dataLength - 1, SeekOrigin.Current);
+                    bw.Write((byte)0);
+                    Int64 currentPosition = bw.BaseStream.Position;
+                    bw.Seek(4+12, SeekOrigin.Begin);
+                    bw.Write((UInt64)currentPosition);
                 } else if(wavFormat == WavFormat.RF64)
                 {
                     throw new Exception("Writing RF64 is not yet implemented.");
@@ -193,9 +268,9 @@ namespace SinusLab
         // TODO Optimize this more and find out how I can return by ref
         public float[] getEntireFileAs32BitFloat()
         {
-            float[] retVal = new float[wavInfo.channelCount*fileLengthInTicks];
+            float[] retVal = new float[wavInfo.channelCount*dataLengthInTicks];
             double[] tmp;
-            for (UInt64 i=0; i<fileLengthInTicks;i++)
+            for (UInt64 i=0; i<dataLengthInTicks;i++)
             {
                 tmp = this[i];
                 for(uint c = 0; c < wavInfo.channelCount; c++)
@@ -487,7 +562,18 @@ namespace SinusLab
 
         ~SuperWAV()
         {
-            fs.Close();
+            if(openMode == OpenMode.OPEN_FOR_READ)
+            {
+
+                br.Dispose();
+                fs.Close();
+            } else
+            {
+
+                br.Dispose();
+                bw.Dispose();
+                fs.Close();
+            }
         }
     }
 }
