@@ -303,9 +303,10 @@ namespace SinusLab
         {
             checkClosed();
 
-            float[] retVal = new float[wavInfo.channelCount*(1+endIndex-startIndex)];
+            UInt64 ticksToServe = (1 + endIndex - startIndex);
+            float[] retVal = new float[wavInfo.channelCount* ticksToServe];
             double[] tmp;
-            for (UInt64 i=0; i< (UInt64)retVal.Length; i++)
+            for (UInt64 i=0; i< ticksToServe; i++)
             {
                 tmp = this[i+startIndex];
                 for(uint c = 0; c < wavInfo.channelCount; c++)
