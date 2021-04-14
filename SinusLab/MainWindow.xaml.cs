@@ -247,8 +247,10 @@ namespace SinusLab
                 if (sfd.ShowDialog() == true)
                 {
                     long frameCount;
+#if !DEBUG
                     try
                     {
+#endif
 
                         VideoFileReader reader = new VideoFileReader();
                         reader.Open(ofd.FileName);
@@ -320,7 +322,7 @@ namespace SinusLab
                             tooFewFramesDelivered = (int)frameCount - currentFrame;
                             Array.Resize<LinearAccessByteImage>(ref loadedVideo, currentFrame);
                         }*/
-
+#if !DEBUG
                     }
                     catch (Exception e)
                     {
@@ -329,6 +331,7 @@ namespace SinusLab
                         videoReferenceFrame = null;
                         btnW64ToVideo.IsEnabled = false;
                     }
+#endif
                 }
             }
         }

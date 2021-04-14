@@ -473,92 +473,11 @@ namespace SinusLab
                         }
                         break;
                 }
-                bw.Write(writeBuffer,(int)firstByteToWriteAbsolute,(int)bytesToWrite);
+
+                bw.BaseStream.Seek((Int64)firstByteToWriteAbsolute, SeekOrigin.Begin);
+                bw.Write(writeBuffer,0,(int)bytesToWrite);
             }
 
-            
-
-            /*
-            if (value.Length != wavInfo.channelCount)
-            {
-                throw new Exception("Data array supplied for writing does not match channel count.");
-            }
-            if (openMode == OpenMode.OPEN_FOR_READ)
-            {
-                throw new Exception("Trying to edit file that was opened for reading only!");
-            }
-            else if (openMode == OpenMode.CREATE_OR_OPEN_FOR_READ_WRITE)
-            {
-                throw new Exception("Modifying existing files is not yet implemented.");
-            }
-            else if (openMode == OpenMode.CREATE_FOR_READ_WRITE)
-            {
-                UInt64 startOffset = index * wavInfo.bytesPerTick;
-                //UInt64 endOffset = startOffset + wavInfo.bytesPerTick -1;
-                checkAndIncreaseDataSize(index);
-                UInt64 startOffsetAbsolute = wavInfo.dataOffset + startOffset;
-
-                byte[] dataToWrite = new byte[wavInfo.bytesPerTick];
-
-                switch (wavInfo.bitsPerSample)
-                {
-                    case 8:
-                        for (int i = 0; i < wavInfo.channelCount; i++)
-                        {
-                            dataToWrite[i] = (byte)(Math.Min(sbyte.MaxValue, Math.Max(sbyte.MinValue, value[i] * Math.Abs((double)sbyte.MinValue))) + 128.0);
-                        }
-                        break;
-                    case 16:
-                        Int16[] tmp0 = new Int16[wavInfo.channelCount];
-                        for (int i = 0; i < wavInfo.channelCount; i++)
-                        {
-                            tmp0[i] = (Int16)(Math.Min(Int16.MaxValue, Math.Max(Int16.MinValue, value[i] * Math.Abs((double)Int16.MinValue))));
-                        }
-                        Buffer.BlockCopy(tmp0, 0, dataToWrite, 0, dataToWrite.Length);
-                        break;
-                    case 32:
-                        if (wavInfo.audioFormat == AudioFormat.FLOAT)
-                        {
-                            float[] tmp1 = new float[wavInfo.channelCount];
-                            for (int i = 0; i < wavInfo.channelCount; i++)
-                            {
-                                tmp1[i] = (float)value[i];
-                            }
-                            Buffer.BlockCopy(tmp1, 0, dataToWrite, 0, dataToWrite.Length);
-                        }
-                        else
-                        {
-                            Int32[] tmp2 = new Int32[wavInfo.channelCount];
-                            for (int i = 0; i < wavInfo.channelCount; i++)
-                            {
-                                tmp2[i] = (Int32)(Math.Min(Int32.MaxValue, Math.Max(Int32.MinValue, value[i] * Math.Abs((double)Int32.MinValue))));
-                            }
-                            Buffer.BlockCopy(tmp2, 0, dataToWrite, 0, dataToWrite.Length);
-                        }
-                        break;
-                    case 24:
-                        Int32[] tmp3 = new Int32[1];
-                        for (int i = 0; i < wavInfo.channelCount; i++)
-                        {
-                            tmp3[0] = (Int32)(Math.Min(Int32.MaxValue, Math.Max(Int32.MinValue, value[i] * Math.Abs((double)Int32.MinValue))));
-                            Buffer.BlockCopy(tmp3, 1, dataToWrite, i * 3, 3);
-                        }
-                        break;
-                }
-
-                bw.BaseStream.Seek((Int64)startOffsetAbsolute, SeekOrigin.Begin);
-                bw.Write(dataToWrite);
-            }*/
-
-            /*double[] tmp = new double[wavInfo.channelCount];
-            for (UInt64 i = 0; i < dataToAddLengthInTicks; i++)
-            {
-                for (uint c = 0; c < wavInfo.channelCount; c++)
-                {
-                    tmp[c] = dataToAdd[i * wavInfo.channelCount + c];
-                }
-                this[offset+i] = tmp;
-            }*/
         }
 
         public WavInfo getWavInfo()
