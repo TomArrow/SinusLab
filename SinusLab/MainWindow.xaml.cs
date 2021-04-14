@@ -156,12 +156,14 @@ namespace SinusLab
                 if (sfd.ShowDialog() == true)
                 {
                     byte[] srcDataByte;
-                    { 
-                        SuperWAV wavFile = new SuperWAV(ofd.FileName);
+                    
+                    using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
+                    {
                         float[] srcData = wavFile.getEntireFileAs32BitFloat();
-                        srcDataByte = new byte[srcData.Length*4];
+                        srcDataByte = new byte[srcData.Length * 4];
                         Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                     }
+                            
 
                     byte[] output = core.StereoToRGB24(srcDataByte);
                     LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, referenceImageHusk);
@@ -214,8 +216,11 @@ namespace SinusLab
 
                     Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
 
-                    SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length/2);
-                    myWav.writeFloatArray(audioDataFloat);
+                    using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length / 2))
+                    {
+                        myWav.writeFloatArray(audioDataFloat);
+                    }
+                        
                     //File.WriteAllBytes(sfd.FileName, audioData);
                 }
             }

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SinusLab
 {
-    class SuperWAV
+    class SuperWAV : IDisposable
     {
 
         public enum WavFormat
@@ -137,7 +137,9 @@ namespace SinusLab
         // Increase size of data chunk if necessary.
         public void checkAndIncreaseDataSize(UInt64 requiredDataSizeInTicks)
         {
-            if(openMode == OpenMode.OPEN_FOR_READ)
+            checkClosed();
+
+            if (openMode == OpenMode.OPEN_FOR_READ)
             {
                 throw new Exception("Trying to manipulate file that was opened for reading only!");
             } else if (openMode == OpenMode.CREATE_OR_OPEN_FOR_READ_WRITE)
@@ -198,7 +200,9 @@ namespace SinusLab
         // Write the bare minimum for a working file.
         private void writeFileHusk(WavFormat wavFormatA,ref WavInfo wavInfoA)
         {
-            if(openMode == OpenMode.CREATE_FOR_READ_WRITE) { 
+            checkClosed();
+
+            if (openMode == OpenMode.CREATE_FOR_READ_WRITE) { 
 
                 if(wavFormatA == WavFormat.WAVE)
                 {
@@ -269,6 +273,8 @@ namespace SinusLab
         // TODO Optimize this more and find out how I can return by ref
         public float[] getEntireFileAs32BitFloat()
         {
+            checkClosed();
+
             float[] retVal = new float[wavInfo.channelCount*dataLengthInTicks];
             double[] tmp;
             for (UInt64 i=0; i<dataLengthInTicks;i++)
@@ -285,6 +291,8 @@ namespace SinusLab
 
         public void writeFloatArray(float [] dataToAdd, UInt64 offset=0)
         {
+            checkClosed();
+
             UInt64 dataToAddLengthInTicks = (UInt64)dataToAdd.Length / (UInt64)wavInfo.channelCount;
             double[] tmp = new double[wavInfo.channelCount];
             for (UInt64 i = 0; i < dataToAddLengthInTicks; i++)
@@ -299,6 +307,7 @@ namespace SinusLab
 
         public WavInfo getWavInfo()
         {
+            checkClosed();
             return wavInfo;
         }
 
@@ -308,6 +317,10 @@ namespace SinusLab
         {
             get
             {
+
+                checkClosed();
+
+
                 double[] retVal = new double[wavInfo.channelCount];
 
                 UInt64 baseOffset = wavInfo.dataOffset + index * wavInfo.bytesPerTick;
@@ -377,8 +390,10 @@ namespace SinusLab
 
             set
             {
+                checkClosed();
 
-                if(value.Length != wavInfo.channelCount)
+
+                if (value.Length != wavInfo.channelCount)
                 {
                     throw new Exception("Data array supplied for writing does not match channel count.");
                 }
@@ -454,6 +469,7 @@ namespace SinusLab
 
         private WavFormat detectWavFormat()
         {
+            checkClosed();
 
             ChunkInfo chunk = readChunk32(0);
             if(chunk.name == "RIFF")
@@ -489,6 +505,8 @@ namespace SinusLab
 
         private WavInfo readWavInfo()
         {
+            checkClosed();
+
             WavInfo retVal = new WavInfo();
             if(wavFormat == WavFormat.WAVE)
             {
@@ -625,6 +643,8 @@ namespace SinusLab
 
         private ChunkInfo readChunk32(UInt64 position)
         {
+            checkClosed();
+
             br.BaseStream.Seek((Int64)position,SeekOrigin.Begin);
             ChunkInfo retVal = new ChunkInfo();
             byte[] nameBytes = br.ReadBytes(4);
@@ -634,6 +654,8 @@ namespace SinusLab
         }
         private ChunkInfo readChunkWave64(UInt64 position)
         {
+            checkClosed();
+
             br.BaseStream.Seek((Int64)position,SeekOrigin.Begin);
             ChunkInfo retVal = new ChunkInfo();
             byte[] nameBytes = br.ReadBytes(4);
@@ -644,21 +666,47 @@ namespace SinusLab
             return retVal;
         }
 
+        bool isClosed = false;
 
-        ~SuperWAV()
+        private void checkClosed()
         {
-            if(openMode == OpenMode.OPEN_FOR_READ)
+            if (isClosed)
+            {
+                throw new Exception("Trying to work with a file that's already closed.");
+            }
+        }
+
+        public void Dispose()
+        {
+            Close();
+        }
+
+        private void Close()
+        {
+
+            if (isClosed)
+            {
+                return; // Do nothing if already closed
+            }
+            if (openMode == OpenMode.OPEN_FOR_READ)
             {
 
                 br.Dispose();
                 fs.Close();
-            } else
+            }
+            else
             {
 
                 br.Dispose();
                 bw.Dispose();
                 fs.Close();
             }
+            isClosed = true;
+        }
+
+        ~SuperWAV()
+        {
+            Close();
         }
     }
 }
