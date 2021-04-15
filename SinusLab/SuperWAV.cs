@@ -652,14 +652,14 @@ namespace SinusLab
             {
                 // Either Wave64 or normal WAV
                 chunk = readChunk32(12);
-                if(chunk.name == "FMT " && chunk.size == 16)
+                if(chunk.name == "FMT " && chunk.size >= 16)
                 {
                     // Probably normal wav?
                     return WavFormat.WAVE;
                 } else 
                 {
                     chunk = readChunkWave64(40);
-                    if (chunk.name == "FMT " && chunk.size == 16 && chunk.isValidWave64LegacyRIFFCode)
+                    if (chunk.name == "FMT " && chunk.size >= 16 && chunk.isValidWave64LegacyRIFFCode)
                     {
                         // Probably wave64? But need to properly read specification to make sure. Just based on hexeditor.
                         return WavFormat.WAVE64;

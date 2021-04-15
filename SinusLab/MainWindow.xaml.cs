@@ -711,6 +711,7 @@ namespace SinusLab
                                             srcData = wavFile.getAs32BitFloatFast(imageLength * a, imageLength * (a + 1) - 1);
 
                                             Task.Run(convertWorker(srcData,(int)a,fast));
+                                            srcData = null;
                                             break;
                                         }
                                     }
@@ -730,6 +731,8 @@ namespace SinusLab
                                         } else
                                         {
                                             writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                            tmpBitmap.Dispose();
+                                            tmpBitmap = null;
                                             lastFrameWrittenIntoVideo++;
                                             imagesLeft--;
                                             writer.Flush();
