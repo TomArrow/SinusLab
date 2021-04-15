@@ -29,6 +29,7 @@
                     <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
                     <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" IsEnabled="False">.w64 to video</Button>
                     <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click" IsEnabled="False">.w64 to video (fast)</Button>
+                    <Button x:Name="btnW64ToVideoFastAsync" Click="btnW64ToVideoFastAsync_Click" IsEnabled="False">.w64 to video (fast,multithread)</Button>
                 </StackPanel>
             </GroupBox>
         </StackPanel>

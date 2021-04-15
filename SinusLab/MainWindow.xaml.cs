@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -37,7 +38,79 @@ namespace SinusLab
             myWav[0] = new double[2] { 0.5, 1.0 };
             myWav[1] = new double[2] { 0.0, 0.0 };
             myWav[2] = new double[2] { -0.5, -1.0};*/
+
+            ThreadTests();
+            
         }
+
+        private async void ThreadTests()
+        {
+            // Gives 3 times the result "3"
+            /*for(int i = 0; i < 3; i++)
+            {
+                Task.Run(() => {
+                    Dispatcher.Invoke(()=> {
+                        MessageBox.Show(i.ToString());
+                    });
+                });
+            }*/
+
+            /*for (int i = 0; i < 3; i++)
+            {
+                Task.Run(blah(i));
+            }*//*
+            for(int i = 0; i < 3; i++)
+            {
+                Task.Run(((int a)=>  {
+                    return (Action)(()=>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            MessageBox.Show(a.ToString());
+                        });
+                    });
+                })(i));
+            }*/
+            /*
+            Func<int,Action> blah = ((int a ) => {
+                return (Action)(() => {
+                    System.Threading.Thread.Sleep(2500);
+                    Dispatcher.Invoke(() => {
+                        MessageBox.Show(a.ToString());
+                    });
+                });
+            });
+
+            for (int i = 0; i < 3; i++)
+            {
+                Task.Run(blah(i));
+            }*/
+
+            // Works:
+            /*
+            for (int i = 0; i < 3; i++)
+            {
+                Task.Run(((Func<int,Action>)(((int a) => {
+                    return (() => {
+                        System.Threading.Thread.Sleep(2500);
+                        Dispatcher.Invoke(() => {
+                            MessageBox.Show(a.ToString());
+                        });
+                    });
+                })))(i));
+            }*/
+
+        }
+        /*
+        public Action blah(int abc)
+        {
+            return () => {
+                System.Threading.Thread.Sleep(2500);
+                Dispatcher.Invoke(() => {
+                    MessageBox.Show(abc.ToString());
+                });
+            };
+        }*/
 
         LinearAccessByteImageUnsignedHusk referenceImageHusk = null;
 
@@ -283,6 +356,7 @@ namespace SinusLab
                         videoReferenceFrame = null;
                         btnW64ToVideo.IsEnabled = false;
                         btnW64ToVideoFast.IsEnabled = false;
+                        btnW64ToVideoFastAsync.IsEnabled = false;
 
                         using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, 48000, 2, SuperWAV.AudioFormat.LPCM, 16))
                         {
@@ -303,6 +377,7 @@ namespace SinusLab
                                         videoReferenceFrame = frameData.toHusk();
                                         btnW64ToVideo.IsEnabled = true;
                                         btnW64ToVideoFast.IsEnabled = true;
+                                        btnW64ToVideoFastAsync.IsEnabled = true;
                                     }
 
                                     byte[] audioData = core.RGB24ToStereo(frameData.imageData);
@@ -343,6 +418,7 @@ namespace SinusLab
                         videoReferenceFrame = null;
                         btnW64ToVideo.IsEnabled = false;
                         btnW64ToVideoFast.IsEnabled = false;
+                        btnW64ToVideoFastAsync.IsEnabled = false;
                     }
 #endif
                 }
@@ -395,6 +471,7 @@ namespace SinusLab
                         videoReferenceFrame = frameData.toHusk();
                         btnW64ToVideo.IsEnabled = true;
                         btnW64ToVideoFast.IsEnabled = true;
+                        btnW64ToVideoFastAsync.IsEnabled = true;
 
                         /*if (currentFrame % 1000 == 0)
                         {
@@ -423,6 +500,7 @@ namespace SinusLab
                     videoReferenceFrame = null;
                     btnW64ToVideo.IsEnabled = false;
                     btnW64ToVideoFast.IsEnabled = false;
+                    btnW64ToVideoFastAsync.IsEnabled = false;
                 }
                 
             }
@@ -450,7 +528,6 @@ namespace SinusLab
                 sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24.mkv";
                 if (sfd.ShowDialog() == true)
                 {
-
 
                     UInt64 frameCount;
 #if !DEBUG
@@ -516,6 +593,184 @@ namespace SinusLab
                 }
             }
         }
+        
+        private async void w64ToVideoMultiThreadedAsync(bool fast = false)
+        {
+            if(videoReferenceFrame == null)
+            {
+                MessageBox.Show("No reference video loaded.");
+                return;
+            }
+
+            int threads = Environment.ProcessorCount;
+            int bufferSize = threads * 2;
+            int mainLoopTimeout = 200;
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Select w64 file coresponding to the loaded reference video";
+
+            if (ofd.ShowDialog() == true)
+            {
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24.mkv";
+                if (sfd.ShowDialog() == true)
+                {
+
+                    ConcurrentDictionary<int, Bitmap> writeBuffer = new ConcurrentDictionary<int, Bitmap>();
+                    bool[] imagesProcessed = new bool[1];
+                    bool[] imagesProcessing = new bool[1];
+
+                    Func<float[],int,bool, Action> convertWorker = ((float[] audioData,int index,bool fastMode) => {
+                        return (Action)(() => {
+                            // Actual code:
+                            byte[] srcDataByte = new byte[audioData.Length * 4];
+                            Buffer.BlockCopy(audioData, 0, srcDataByte, 0, srcDataByte.Length);
+                            audioData = null;
+                            byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                            srcDataByte = null;
+                            LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                            Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                            image = null;
+                            bool addingSucceeded = false;
+                            while (!addingSucceeded)
+                            {
+                                addingSucceeded = writeBuffer.TryAdd(index, imgBitmap); 
+                                System.Threading.Thread.Sleep(mainLoopTimeout);
+                            }
+                            //writeBuffer.Add(index, imgBitmap);
+                            imgBitmap = null;
+                            imagesProcessing[index] = false;
+                            imagesProcessed[index] = true;
+                        });
+                    });
+
+                    UInt64 frameCount;
+#if !DEBUG
+                    try
+                    {
+#endif
+                        using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
+                        {
+                            //float[] srcData = wavFile.getEntireFileAs32BitFloat();
+                            //srcDataByte = new byte[srcData.Length * 4];
+                            //Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
+                        
+                            VideoFileWriter writer = new VideoFileWriter();
+                            writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
+
+                            /*
+                            Console.WriteLine("width:  " + reader.Width);
+                            Console.WriteLine("height: " + reader.Height);
+                            Console.WriteLine("fps:    " + reader.FrameRate);
+                            Console.WriteLine("codec:  " + reader.CodecName);
+                            Console.WriteLine("length:  " + reader.FrameCount);
+                            */
+
+                            UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
+                            frameCount = wavFile.DataLengthInTicks/(imageLength);
+
+                            //byte[] srcDataByte;
+                            //byte[] output;
+                            //Bitmap imgBitmap; 
+                            float[] srcData;
+                            //LinearAccessByteImageUnsignedNonVectorized image;
+
+                            //int currentFrame = 0;
+
+                            //int frameToWrite = 0;
+                            UInt64 imagesLeft = frameCount;
+                            imagesProcessed = new bool[frameCount];
+                            imagesProcessing = new bool[frameCount];
+
+                            Int64 lastFrameWrittenIntoVideo = -1;
+
+                            Bitmap tmpBitmap;
+
+                            while (imagesLeft > 0)
+                            {
+                                int numberOfThreadsCurrentlyProcessing = 0;
+                                foreach(bool imageProcessing in imagesProcessing)
+                                {
+                                    if (imageProcessing)
+                                    {
+                                        numberOfThreadsCurrentlyProcessing++;
+                                    }
+                                }
+
+                                int writeBufferFillStatusWorstCase = writeBuffer.Count+numberOfThreadsCurrentlyProcessing;
+
+                                int numberOfThreadsToSpawn = Math.Min(threads - numberOfThreadsCurrentlyProcessing,bufferSize - writeBufferFillStatusWorstCase);
+
+                                for(int i = 0; i < numberOfThreadsToSpawn; i++)
+                                {
+                                    for(UInt64 a = 0; a < frameCount; a++)
+                                    {
+                                        if (!imagesProcessed[a] && !imagesProcessing[a]) {
+                                            imagesProcessing[a] = true;
+
+                                            srcData = wavFile.getAs32BitFloatFast(imageLength * a, imageLength * (a + 1) - 1);
+
+                                            Task.Run(convertWorker(srcData,(int)a,fast));
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // Do actual video writing
+                                bool framesAvailable = true;
+                                while (framesAvailable && lastFrameWrittenIntoVideo < (Int64)(frameCount-1))
+                                {
+                                    UInt64 nextFrameToBeWritten = (UInt64)(lastFrameWrittenIntoVideo + 1);
+                                    if (imagesProcessed[nextFrameToBeWritten] && writeBuffer.ContainsKey((int)nextFrameToBeWritten))
+                                    {
+                                        bool readingSucceeded = writeBuffer.TryRemove((int)nextFrameToBeWritten,out tmpBitmap); // We're using remove here because that returns a bitmap whether we want to or not anyway...
+                                        if (!readingSucceeded)
+                                        {
+                                            framesAvailable = false;
+                                        } else
+                                        {
+                                            writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                            lastFrameWrittenIntoVideo++;
+                                            imagesLeft--;
+                                            writer.Flush();
+                                        }
+
+                                    } else
+                                    {
+                                        framesAvailable = false;
+                                    }
+                                }
+
+                                System.Threading.Thread.Sleep(mainLoopTimeout);
+                            }
+                            /*for (UInt64 i = 0; i < frameCount; i++)
+                            {
+                                //srcData = wavFile.getAs32BitFloat(imageLength*i, imageLength*(i+1)-1); 
+                                srcData = wavFile.getAs32BitFloatFast(imageLength*i, imageLength*(i+1)-1); 
+                                
+
+
+                                writer.WriteVideoFrame(imgBitmap,(uint)i);
+                                writer.Flush();
+                                /*if (currentFrame % 1000 == 0)
+                                {
+                                    progress.Report("Saving video: " + i + "/" + frameCount + " frames");
+                                }*/
+                            //}*/
+
+                            writer.Close();
+                        }
+#if !DEBUG
+                    }
+                    catch (Exception e)
+                    {
+                       MessageBox.Show(e.Message);
+                    }
+#endif
+                   
+                }
+            }
+        }
 
         private void btnW64ToVideoFast_Click(object sender, RoutedEventArgs e)
         {
@@ -525,6 +780,11 @@ namespace SinusLab
         private void btnWavToImageFast_Click(object sender, RoutedEventArgs e)
         {
             wavToImage(true);
+        }
+
+        private void btnW64ToVideoFastAsync_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(true);
         }
     }
 }
