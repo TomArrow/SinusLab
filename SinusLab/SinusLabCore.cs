@@ -13,9 +13,10 @@ namespace SinusLab
         public int samplerate = 48000;
         public double maxAmplitude = Math.Sqrt(2.0) / 2.0;
         public int lowerFrequency = 500;
-        public int lowerFrequencyV2 = 3000; // In V2, we encode a low frequency luma offset signal into a 30Hz signal in the chroma so as to compensate for the kind of "centering" happening when converting to the analogue domain or applying many kinds of effects. We sacrifice a bit of hue precision for greater luma precision
+        public int lowerFrequencyV2 = 3000; // In V2, we encode a low frequency luma offset signal into a 500Hz signal in the chroma so as to compensate for the kind of "centering" happening when converting to the analogue domain or applying many kinds of effects. We sacrifice a bit of hue precision for greater luma precision
         public int upperFrequency = 20000;
         public int upperFrequencyV2 = 20000;
+        double lumaInChromaFrequencyV2 = 500.0;
 
         public int windowSize = 32;
 
@@ -39,9 +40,9 @@ namespace SinusLab
             double phaseAdvancementHere;
             double phaseHere;
             double hueTo0to1Range;
-            output[0] = 0;
+            //output[0] = 0;
             Vector3 tmpV;
-            for (int i = 1; i < output.Length; i++)
+            for (int i = 0; i < output.Length; i++)
             {
                 tmpV.X = (float)((double)sourceData[i * 3]); // R
                 tmpV.Y = (float)((double)sourceData[i * 3 + 1]);  // G
@@ -61,7 +62,7 @@ namespace SinusLab
 
             byte[] outputBytes = new byte[output.Length * 4 * 2];
             byte[] tmp;
-            for (int i = 1; i < output.Length; i++)
+            for (int i = 0; i < output.Length; i++)
             {
                 tmp = BitConverter.GetBytes((float)outputL[i]);
                 Array.Copy(tmp, 0, outputBytes, i * 4 * 2, 4);
@@ -73,16 +74,22 @@ namespace SinusLab
 
         }
         
+        struct AverageHelper
+        {
+            public double totalValue;
+            public double multiplier;
+        }
+
         public byte[] RGB24ToStereoV2(byte[] sourceData)
         {
 
-            double frequencyRange = upperFrequency - lowerFrequencyV2;
+            double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
-            double lumaInChromaFrequency = 30.0;
 
             //double distanceRatio = 2*(double)frequencyToGenerate/ (double)samplerate; 
             double[] output = new double[sourceData.Length / 3];
             double[] outputL = new double[sourceData.Length / 3];
+            double[] LforSmooth = new double[sourceData.Length / 3];
 
             double lastPhase = 0;
             double frequencyHere;
@@ -90,9 +97,9 @@ namespace SinusLab
             double phaseAdvancementHere;
             double phaseHere;
             double hueTo0to1Range;
-            output[0] = 0;
+            //output[0] = 0;
             Vector3 tmpV;
-            for (int i = 1; i < output.Length; i++)
+            for (int i = 0; i < output.Length; i++)
             {
                 tmpV.X = (float)((double)sourceData[i * 3]); // R
                 tmpV.Y = (float)((double)sourceData[i * 3 + 1]);  // G
@@ -105,21 +112,57 @@ namespace SinusLab
                 phaseLengthHere = ((double)samplerate) / frequencyHere / 2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
-                output[i] = (double)tmpV.Y / 100.0 * maxAmplitude * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
-                outputL[i] = ((double)tmpV.X - 50) * 2 / 100.0 * (maxAmplitude/2); // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
+                output[i] = (double)tmpV.Y / 100.0 * (maxAmplitude/2) * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
+                outputL[i] = ((double)tmpV.X - 50) * 2 / 100.0 * maxAmplitude; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
+                LforSmooth[i] = (double)tmpV.X/ 100.0; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
                 lastPhase = phaseHere % 2;
             }
 
             // Now encode a low frequency (about 10Hz) luma offset into the chroma.
             // For that, we first smooth the luma to represent thatt
-            double[] smoothedLuma = new double[outputL.Length];
-            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequency;
-
-
+            // Done with a simple box blue
+            double[] smoothedLuma = new double[LforSmooth.Length];
+            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength);
+            AverageHelper averageHelper = new AverageHelper();
+            for (int i = 0; i < LforSmooth.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= averageSampleRadius; ii++)
+                    {
+                        if((i+ii) >= LforSmooth.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += LforSmooth[i+ii];
+                        averageHelper.multiplier += 1;
+                    }
+                } else { 
+                    if (i > averageSampleRadius)
+                    {
+                        averageHelper.totalValue -= LforSmooth[i-averageSampleRadius-1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if((i+averageSampleRadius) < LforSmooth.Length)
+                    {
+                        averageHelper.totalValue += LforSmooth[i + averageSampleRadius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
+            }
+            // Now encode the smoother Luma via amplitude modulation into a 500 Hz signal added to chroma:
+            double phaseLength = ((double)samplerate) / lumaInChromaFrequencyV2 / 2;
+            double phaseAdvancement = 1 / phaseLength;
+            for (int i = 0; i < smoothedLuma.Length; i++)
+            {
+                output[i] += (maxAmplitude/2)*smoothedLuma[i] * Math.Sin(phaseAdvancement*i * Math.PI);
+            }
 
             byte[] outputBytes = new byte[output.Length * 4 * 2];
             byte[] tmp;
-            for (int i = 1; i < output.Length; i++)
+            for (int i = 0; i < output.Length; i++)
             {
                 tmp = BitConverter.GetBytes((float)outputL[i]);
                 Array.Copy(tmp, 0, outputBytes, i * 4 * 2, 4);
@@ -229,7 +272,7 @@ namespace SinusLab
         
         public byte[] StereoToRGB24V2(byte[] sourceData)
         {
-            double frequencyRange = upperFrequency - lowerFrequencyV2;
+            double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
 
 
@@ -239,12 +282,49 @@ namespace SinusLab
             for (int i = 0; i < decodeL.Length; i++)
             {
                 decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
+                decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
                 decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
             double[] audioPart = new double[windowSize];
 
             double[] freqs;
+
+            // Now we smooth the luma so we can calculate the correct offset.
+            double[] smoothedLuma = new double[decodeL.Length];
+            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength);
+            AverageHelper averageHelper = new AverageHelper();
+            for (int i = 0; i < decodeL.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= averageSampleRadius; ii++)
+                    {
+                        if ((i + ii) >= decodeL.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += decodeL[i + ii];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                else
+                {
+                    if (i > averageSampleRadius)
+                    {
+                        averageHelper.totalValue -= decodeL[i - averageSampleRadius - 1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if ((i + averageSampleRadius) < decodeL.Length)
+                    {
+                        averageHelper.totalValue += decodeL[i + averageSampleRadius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
+            }
+
 
             //double[] c = new double[decodeL.Length];
             //double[] h = new double[decodeL.Length];
@@ -263,7 +343,15 @@ namespace SinusLab
 
             Vector3 tmpV;
 
-            // decode c,h components
+            //Vector3[] outputBuffer = new Vector3[decodeL.Length];
+            //double decodedLFLuma;
+            double lumaFixRatio;
+
+            double[] decodedLFLuma = new double[decodeL.Length];
+            double[] decodedC = new double[decodeL.Length];
+            double[] decodedH = new double[decodeL.Length];
+
+            // decode c,h components and low frequency luma
             for (int i = 0; i < decodeL.Length; i++)
             {
                 Array.Copy(decode, i, audioPart, 0, windowSize);
@@ -275,6 +363,7 @@ namespace SinusLab
                 // find biggest frequency
                 for (int b = 0; b < freqs.Length; b++)
                 {
+                    if (freqs[b] < lowerFrequencyV2) continue; // We need to ignore low frequencies in V2 because they will carry the luma offset.
                     if (fftMagnitude[b] > tmpMaxIntensity)
                     {
                         tmpMaxIntensity = fftMagnitude[b];
@@ -302,7 +391,15 @@ namespace SinusLab
 
                 if (double.IsNaN(hue)) { hue = 0; } // Necessary for really dark/black areas, otherwise they just turn the entire image black because all other calculation fails as a result.
 
-                tmpV.X = (float)(decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                // 0.05286 = thats the decoded value for fftmagnitude[0] I get for luma = 1.0 (full)
+                // 0.098528 = thats the decoded value for fftmagnitude[1] I get for luma = 1.0 (full)
+                // Maybe average both?
+                decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
+                //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
+                decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
+                decodedH[i] = (float)hue;
+                /*
+                tmpV.X = (float)(decodeL[i]*lumaFixRatio);
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/0.707f*100f; //experimental * 4, normally doesnt beong there.
@@ -316,7 +413,57 @@ namespace SinusLab
                 output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                 output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
                 output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                */
             }
+
+
+            // Now we smooth the decoded LF luma so we can calculate the correct offset.
+            double[] smoothedLFLuma = new double[decodedLFLuma.Length];
+            for (int i = 0; i < decodedLFLuma.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= averageSampleRadius; ii++)
+                    {
+                        if ((i + ii) >= decodedLFLuma.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += decodedLFLuma[i + ii];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                else
+                {
+                    if (i > averageSampleRadius)
+                    {
+                        averageHelper.totalValue -= decodedLFLuma[i - averageSampleRadius - 1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if ((i + averageSampleRadius) < decodedLFLuma.Length)
+                    {
+                        averageHelper.totalValue += decodedLFLuma[i + averageSampleRadius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                smoothedLFLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
+            }
+
+
+            for (int i = 0; i < decodeL.Length; i++) {
+
+                lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
+                tmpV.X = (float)(decodeL[i] * lumaFixRatio);
+                tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                tmpV.Z = (float)decodedH[i];
+
+                tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+            }
+
 
             return output;
         }
