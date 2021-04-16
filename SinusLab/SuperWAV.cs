@@ -15,7 +15,8 @@ namespace SinusLab
             UNDEFINED_INVALID,
             WAVE,
             WAVE64,
-            RF64
+            RF64,
+            CUBASE_BIGFILE
         }
 
         WavFormat wavFormat = WavFormat.UNDEFINED_INVALID;
@@ -45,7 +46,7 @@ namespace SinusLab
         {
             LPCM = 1,
             FLOAT = 3,
-            RF64_FLOAT = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+            RF64_FLOAT_OR_CUBASE_BIGFILE = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
 
         public struct WavInfo
@@ -238,7 +239,7 @@ namespace SinusLab
                     bw.Write((byte)0);
                     Int64 currentPosition = bw.BaseStream.Position;
                     bw.Seek(4, SeekOrigin.Begin);
-                    bw.Write((UInt32)currentPosition-8); // Check if -8 is actually correct
+                    bw.Write((UInt32)currentPosition-8); // TODO Check if -8 is actually correct
 
 
 
@@ -791,7 +792,7 @@ namespace SinusLab
                 retVal.bytesPerTick = br.ReadUInt16();
                 retVal.bitsPerSample = br.ReadUInt16();
 
-                if(retVal.audioFormat == AudioFormat.RF64_FLOAT) // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+                if(retVal.audioFormat == AudioFormat.RF64_FLOAT_OR_CUBASE_BIGFILE) // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
                 {
                     retVal.audioFormat = AudioFormat.FLOAT;
                 }

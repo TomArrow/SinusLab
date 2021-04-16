@@ -147,9 +147,10 @@ namespace SinusLab
                     LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(loadedImage);
 
                     referenceImageHusk = byteImg.toHusk();
-                    btnRawToImage.IsEnabled = true;
-                    btnWavToImage.IsEnabled = true;
-                    btnWavToImageFast.IsEnabled = true;
+                    //btnRawToImage.IsEnabled = true;
+                    //btnWavToImage.IsEnabled = true;
+                    //btnWavToImageFast.IsEnabled = true;
+                    buttonsWavToImage.IsEnabled = true;
 
                     byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
                 
@@ -213,9 +214,11 @@ namespace SinusLab
 
                 referenceImageHusk = byteImg.toHusk();
 
-                btnRawToImage.IsEnabled = true;
-                btnWavToImage.IsEnabled = true;
-                btnWavToImageFast.IsEnabled = true;
+                //btnRawToImage.IsEnabled = true;
+                //btnWavToImage.IsEnabled = true;
+                //btnWavToImageFast.IsEnabled = true;
+
+                buttonsWavToImage.IsEnabled = true;
             }
         }
 
@@ -224,7 +227,7 @@ namespace SinusLab
             wavToImage();
         }
         
-        private void wavToImage(bool fast = false)
+        private void wavToImage(bool fast = false,SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select wav file coresponding to the loaded reference image";
@@ -232,7 +235,20 @@ namespace SinusLab
             if (ofd.ShowDialog() == true)
             {
                 SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24.png";
+
+                string suffix = "";
+                switch (formatVersion)
+                {
+                    case SinusLabCore.SinusLabFormatVersion.V2:
+                        suffix = "V2";
+                        break;
+                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    default:
+                        suffix = "V1";
+                        break;
+                }
+
+                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+ suffix + ".png";
                 if (sfd.ShowDialog() == true)
                 {
                     byte[] srcDataByte;
@@ -245,8 +261,18 @@ namespace SinusLab
                         Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                     }
 
-
-                    byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                    byte[] output;
+                    switch (formatVersion)
+                    {
+                        case SinusLabCore.SinusLabFormatVersion.V2:
+                            output = core.StereoToRGB24V2(srcDataByte);
+                            break;
+                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                        default:
+                            output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                            break;
+                    }
+                    
                     LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, referenceImageHusk);
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                     imgBitmap.Save(sfd.FileName);
@@ -259,7 +285,7 @@ namespace SinusLab
             imageToWav();
         }
 
-        private void imageToWav()
+        private void imageToWav(SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select an RGB24 image";
@@ -268,7 +294,20 @@ namespace SinusLab
             {
 
                 SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm.wav";
+
+                string suffix = "";
+                switch (formatVersion)
+                {
+                    case SinusLabCore.SinusLabFormatVersion.V2:
+                        suffix = "V2";
+                        break;
+                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    default:
+                        suffix = "V1";
+                        break;
+                }
+
+                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm"+ suffix + ".wav";
                 if (sfd.ShowDialog() == true)
                 {
 
@@ -288,11 +327,22 @@ namespace SinusLab
                     LinearAccessByteImageUnsignedNonVectorized byteImg = Helpers.BitmapToLinearAccessByteArraUnsignedNonVectorizedy(loadedImage);
 
                     referenceImageHusk = byteImg.toHusk();
-                    btnRawToImage.IsEnabled = true;
-                    btnWavToImage.IsEnabled = true;
-                    btnWavToImageFast.IsEnabled = true;
+                    //btnRawToImage.IsEnabled = true;
+                    //btnWavToImage.IsEnabled = true;
+                    //btnWavToImageFast.IsEnabled = true;
+                    buttonsWavToImage.IsEnabled = true;
 
-                    byte[] audioData = core.RGB24ToStereo(byteImg.imageData);
+                    byte[] audioData;
+                    switch (formatVersion)
+                    {
+                        case SinusLabCore.SinusLabFormatVersion.V2:
+                            audioData = core.RGB24ToStereoV2(byteImg.imageData);
+                            break;
+                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                        default:
+                            audioData = core.RGB24ToStereo(byteImg.imageData);
+                            break;
+                    }
 
                     float[] audioDataFloat = new float[audioData.Length / 4];
 
@@ -788,6 +838,16 @@ namespace SinusLab
         private void btnW64ToVideoFastAsync_Click(object sender, RoutedEventArgs e)
         {
             w64ToVideoMultiThreadedAsync(true);
+        }
+
+        private void btnImageToWavV2_Click(object sender, RoutedEventArgs e)
+        {
+            imageToWav(SinusLabCore.SinusLabFormatVersion.V2);
+        }
+
+        private void btnWavToImageV2_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(false,SinusLabCore.SinusLabFormatVersion.V2);
         }
     }
 }
