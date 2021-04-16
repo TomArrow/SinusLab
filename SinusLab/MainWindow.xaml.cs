@@ -240,7 +240,7 @@ namespace SinusLab
                     using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
                     {
                         //float[] srcData = wavFile.getEntireFileAs32BitFloat();
-                        float[] srcData = wavFile.getAs32BitFloatFast(0,(UInt64)referenceImageHusk.width* (UInt64)referenceImageHusk.height);
+                        float[] srcData = wavFile.getAs32BitFloatFast(0,(UInt64)referenceImageHusk.width* (UInt64)referenceImageHusk.height-1);
                         srcDataByte = new byte[srcData.Length * 4];
                         Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                     }

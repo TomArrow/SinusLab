@@ -397,7 +397,7 @@ namespace SinusLab
         {
             checkClosed();
 
-            checkAndIncreaseDataSize((UInt64)dataToAdd.Length+offset);
+            checkAndIncreaseDataSize((UInt64)dataToAdd.Length / wavInfo.channelCount + offset);
 
             UInt64 dataToAddLengthInTicks = (UInt64)dataToAdd.Length / (UInt64)wavInfo.channelCount;
             double[] tmp = new double[wavInfo.channelCount];
@@ -425,7 +425,7 @@ namespace SinusLab
             else if (openMode == OpenMode.CREATE_FOR_READ_WRITE)
             {
                 UInt64 dataToAddLength = (UInt64)dataToAdd.Length;
-                checkAndIncreaseDataSize(dataToAddLength + offset);
+                checkAndIncreaseDataSize(dataToAddLength/wavInfo.channelCount + offset);
 
                 UInt64 dataToAddLengthInTicks = (UInt64)dataToAdd.Length / (UInt64)wavInfo.channelCount;
                 UInt64 bytesToWrite = dataToAddLengthInTicks * wavInfo.bytesPerTick;
