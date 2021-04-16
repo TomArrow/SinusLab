@@ -17,12 +17,15 @@ namespace SinusLab
         public int upperFrequency = 20000;
         public int upperFrequencyV2 = 20000;
         double lumaInChromaFrequencyV2 = 500.0;
+        double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
+        double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
 
         public int windowSize = 32;
 
         public enum SinusLabFormatVersion {
             DEFAULT_LEGACY = 0,
             V2 = 1, 
+            V2_NOLUMA_DECODE_ONLY = 2
         };
 
         public byte[] RGB24ToStereo(byte[] sourceData)
@@ -123,7 +126,7 @@ namespace SinusLab
             // Done with a simple box blue
             double[] smoothedLuma = new double[LforSmooth.Length];
             double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
-            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength);
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength* waveLengthSmoothRadiusMultiplierEncodeV2);
             AverageHelper averageHelper = new AverageHelper();
             for (int i = 0; i < LforSmooth.Length; i++)
             {
@@ -152,6 +155,7 @@ namespace SinusLab
                 }
                 smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
             }
+            
             // Now encode the smoother Luma via amplitude modulation into a 500 Hz signal added to chroma:
             double phaseLength = ((double)samplerate) / lumaInChromaFrequencyV2 / 2;
             double phaseAdvancement = 1 / phaseLength;
@@ -270,7 +274,7 @@ namespace SinusLab
         }
         
         
-        public byte[] StereoToRGB24V2(byte[] sourceData)
+        public byte[] StereoToRGB24V2(byte[] sourceData, bool decodeLFLuma = true)
         {
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
@@ -290,41 +294,7 @@ namespace SinusLab
 
             double[] freqs;
 
-            // Now we smooth the luma so we can calculate the correct offset.
-            double[] smoothedLuma = new double[decodeL.Length];
-            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
-            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength);
-            AverageHelper averageHelper = new AverageHelper();
-            for (int i = 0; i < decodeL.Length; i++)
-            {
-                if (i == 0)
-                {
-                    for (int ii = 0; ii <= averageSampleRadius; ii++)
-                    {
-                        if ((i + ii) >= decodeL.Length)
-                        {
-                            break;
-                        }
-                        averageHelper.totalValue += decodeL[i + ii];
-                        averageHelper.multiplier += 1;
-                    }
-                }
-                else
-                {
-                    if (i > averageSampleRadius)
-                    {
-                        averageHelper.totalValue -= decodeL[i - averageSampleRadius - 1];
-                        averageHelper.multiplier -= 1;
-                    }
-                    if ((i + averageSampleRadius) < decodeL.Length)
-                    {
-                        averageHelper.totalValue += decodeL[i + averageSampleRadius];
-                        averageHelper.multiplier += 1;
-                    }
-                }
-                smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
-            }
-
+            
 
             //double[] c = new double[decodeL.Length];
             //double[] h = new double[decodeL.Length];
@@ -394,7 +364,7 @@ namespace SinusLab
                 // 0.05286 = thats the decoded value for fftmagnitude[0] I get for luma = 1.0 (full)
                 // 0.098528 = thats the decoded value for fftmagnitude[1] I get for luma = 1.0 (full)
                 // Maybe average both?
-                decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
+                decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
                 //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
                 decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
                 decodedH[i] = (float)hue;
@@ -417,52 +387,109 @@ namespace SinusLab
             }
 
 
-            // Now we smooth the decoded LF luma so we can calculate the correct offset.
-            double[] smoothedLFLuma = new double[decodedLFLuma.Length];
-            for (int i = 0; i < decodedLFLuma.Length; i++)
+            // Now we smooth the luma so we can calculate the correct offset.
+            double[] smoothedLuma = new double[decodeL.Length];
+            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength*waveLengthSmoothRadiusMultiplierDecodeV2);
+            AverageHelper averageHelper = new AverageHelper();
+            if (decodeLFLuma)
             {
-                if (i == 0)
+
+                for (int i = 0; i < decodeL.Length; i++)
                 {
-                    for (int ii = 0; ii <= averageSampleRadius; ii++)
+                    if (i == 0)
                     {
-                        if ((i + ii) >= decodedLFLuma.Length)
+                        for (int ii = 0; ii <= averageSampleRadius; ii++)
                         {
-                            break;
+                            if ((i + ii) >= decodeL.Length)
+                            {
+                                break;
+                            }
+                            averageHelper.totalValue += decodeL[i + ii];
+                            averageHelper.multiplier += 1;
                         }
-                        averageHelper.totalValue += decodedLFLuma[i + ii];
-                        averageHelper.multiplier += 1;
                     }
+                    else
+                    {
+                        if (i > averageSampleRadius)
+                        {
+                            averageHelper.totalValue -= decodeL[i - averageSampleRadius - 1];
+                            averageHelper.multiplier -= 1;
+                        }
+                        if ((i + averageSampleRadius) < decodeL.Length)
+                        {
+                            averageHelper.totalValue += decodeL[i + averageSampleRadius];
+                            averageHelper.multiplier += 1;
+                        }
+                    }
+                    smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
                 }
-                else
+
+                // Now we smooth the decoded LF luma so we can calculate the correct offset.
+                double[] smoothedLFLuma = new double[decodedLFLuma.Length];
+                for (int i = 0; i < decodedLFLuma.Length; i++)
                 {
-                    if (i > averageSampleRadius)
+                    if (i == 0)
                     {
-                        averageHelper.totalValue -= decodedLFLuma[i - averageSampleRadius - 1];
-                        averageHelper.multiplier -= 1;
+                        for (int ii = 0; ii <= averageSampleRadius; ii++)
+                        {
+                            if ((i + ii) >= decodedLFLuma.Length)
+                            {
+                                break;
+                            }
+                            averageHelper.totalValue += decodedLFLuma[i + ii];
+                            averageHelper.multiplier += 1;
+                        }
                     }
-                    if ((i + averageSampleRadius) < decodedLFLuma.Length)
+                    else
                     {
-                        averageHelper.totalValue += decodedLFLuma[i + averageSampleRadius];
-                        averageHelper.multiplier += 1;
+                        if (i > averageSampleRadius)
+                        {
+                            averageHelper.totalValue -= decodedLFLuma[i - averageSampleRadius - 1];
+                            averageHelper.multiplier -= 1;
+                        }
+                        if ((i + averageSampleRadius) < decodedLFLuma.Length)
+                        {
+                            averageHelper.totalValue += decodedLFLuma[i + averageSampleRadius];
+                            averageHelper.multiplier += 1;
+                        }
                     }
+                    smoothedLFLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
                 }
-                smoothedLFLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
+
+                for (int i = 0; i < decodeL.Length; i++)
+                {
+
+                    lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
+                    tmpV.X = (float)(decodeL[i] * lumaFixRatio);
+                    tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                    tmpV.Z = (float)decodedH[i];
+
+                    tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                    output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                    output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                    output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                }
+            } else
+            {
+                // If LF luma decoding not desired, just ignore.
+                for (int i = 0; i < decodeL.Length; i++)
+                {
+
+                    tmpV.X = (float)(decodeL[i]);
+                    tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                    tmpV.Z = (float)decodedH[i];
+
+                    tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                    output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                    output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                    output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                }
             }
 
-
-            for (int i = 0; i < decodeL.Length; i++) {
-
-                lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
-                tmpV.X = (float)(decodeL[i] * lumaFixRatio);
-                tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
-                tmpV.Z = (float)decodedH[i];
-
-                tmpV = Helpers.CIELChabTosRGB(tmpV);
-
-                output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
-                output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
-                output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
-            }
+            
 
 
             return output;

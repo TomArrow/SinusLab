@@ -23,6 +23,7 @@
                         <Button x:Name="btnRawToImage" Click="btnRawToImage_Click">.raw audio to image</Button>
                         <Button x:Name="btnWavToImage" Click="btnWavToImage_Click">.wav audio to image</Button>
                         <Button x:Name="btnWavToImageV2" Click="btnWavToImageV2_Click">.wav audio to image (V2)</Button>
+                        <Button x:Name="btnWavToImageV2NoLFLuma" Click="btnWavToImageV2NoLFLuma_Click">.wav audio to image (V2 noluma)</Button>
                         <Button x:Name="btnWavToImageFast" Click="btnWavToImageFast_Click">.wav audio to image (fast)</Button>
                     </StackPanel>
                 </StackPanel>

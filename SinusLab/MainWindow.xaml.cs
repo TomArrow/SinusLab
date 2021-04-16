@@ -242,6 +242,9 @@ namespace SinusLab
                     case SinusLabCore.SinusLabFormatVersion.V2:
                         suffix = "V2";
                         break;
+                    case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                        suffix = "V2noLum";
+                        break;
                     case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
                     default:
                         suffix = "V1";
@@ -264,6 +267,9 @@ namespace SinusLab
                     byte[] output;
                     switch (formatVersion)
                     {
+                        case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                            output = core.StereoToRGB24V2(srcDataByte,false);
+                            break;
                         case SinusLabCore.SinusLabFormatVersion.V2:
                             output = core.StereoToRGB24V2(srcDataByte);
                             break;
@@ -848,6 +854,11 @@ namespace SinusLab
         private void btnWavToImageV2_Click(object sender, RoutedEventArgs e)
         {
             wavToImage(false,SinusLabCore.SinusLabFormatVersion.V2);
+        }
+
+        private void btnWavToImageV2NoLFLuma_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(false, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
         }
     }
 }
