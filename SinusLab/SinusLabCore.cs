@@ -278,21 +278,35 @@ namespace SinusLab
         {
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
-
+            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*48000);
+            int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
 
             double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
-            for (int i = 0; i < decodeL.Length; i++)
+            if (decodeLFLuma)
             {
-                decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
+                for (int i = 0; i < decodeL.Length; i++)
+                {
+                    decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                    decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                }
+                Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
+            } else
+            {
+                for (int i = 0; i < decodeL.Length; i++)
+                {
+                    decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                    decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                }
             }
+            
 
-            double[] audioPart = new double[windowSize];
 
-            double[] freqs;
 
             
 
@@ -302,8 +316,19 @@ namespace SinusLab
             byte[] output = new byte[decodeL.Length * 3];
 
 
+            double[] audioPart = new double[windowSize];
+            double[] freqs;
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
             freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+
+
+            // For LF Luma decode
+            double[] audioPartForLFLuma = new double[windowSizeForLFLuma];
+            double[] freqsForLFLuma;
+            double[] fftMagnitudeForLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
+            freqsForLFLuma = FftSharp.Transform.FFTfreq(samplerate, fftMagnitudeForLFLuma.Length);
+
+
 
             double tmpMaxIntensity = 0;
             int tmpMaxIntensityIndex = 0;
@@ -321,13 +346,22 @@ namespace SinusLab
             double[] decodedC = new double[decodeL.Length];
             double[] decodedH = new double[decodeL.Length];
 
+            double[] window = FftSharp.Window.Hanning(audioPart.Length);
+            double[] windowForLFLuma = FftSharp.Window.Hanning(audioPartForLFLuma.Length);
+
             // decode c,h components and low frequency luma
             for (int i = 0; i < decodeL.Length; i++)
             {
                 Array.Copy(decode, i, audioPart, 0, windowSize);
-                double[] window = FftSharp.Window.Hanning(audioPart.Length);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
                 fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
+
+                if (decodeLFLuma)
+                {
+                    Array.Copy(decodeForLFLuma, i, audioPartForLFLuma, 0, windowSizeForLFLuma);
+                    FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
+                    fftMagnitudeForLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
+                }
 
                 tmpMaxIntensity = 0;
                 // find biggest frequency
@@ -361,10 +395,13 @@ namespace SinusLab
 
                 if (double.IsNaN(hue)) { hue = 0; } // Necessary for really dark/black areas, otherwise they just turn the entire image black because all other calculation fails as a result.
 
+                // For Window size 32:
                 // 0.05286 = thats the decoded value for fftmagnitude[0] I get for luma = 1.0 (full)
                 // 0.098528 = thats the decoded value for fftmagnitude[1] I get for luma = 1.0 (full)
                 // Maybe average both?
-                decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
+                //decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
+                // For Window size 128: [1] is 0.16735944031697095  [2] is 0.13069097631912735
+                decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735))/2;
                 //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
                 decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
                 decodedH[i] = (float)hue;
@@ -426,7 +463,9 @@ namespace SinusLab
                 }
 
                 // Now we smooth the decoded LF luma so we can calculate the correct offset.
+                //double[] smoothedLFLuma = decodedLFLuma;
                 double[] smoothedLFLuma = new double[decodedLFLuma.Length];
+                averageHelper = new AverageHelper();
                 for (int i = 0; i < decodedLFLuma.Length; i++)
                 {
                     if (i == 0)
@@ -456,6 +495,7 @@ namespace SinusLab
                     }
                     smoothedLFLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
                 }
+                
 
                 for (int i = 0; i < decodeL.Length; i++)
                 {
