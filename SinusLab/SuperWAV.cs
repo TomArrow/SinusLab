@@ -733,6 +733,10 @@ namespace SinusLab
                 UInt64 resultPosition;
                 do
                 {
+                    if (currentPosition % 8 != 0)
+                    {
+                        currentPosition = ((currentPosition / 8) + 1) * 8; // Need to remember that wave64 stuff always needs to be aligned on 8 byte boundaries!
+                    }
                     chunk = readChunkWave64(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
                     resultPosition = currentPosition;
                     currentPosition += 24 + chunk.size;
@@ -754,6 +758,10 @@ namespace SinusLab
                 currentPosition = 40;
                 do
                 {
+                    if (currentPosition % 8 != 0)
+                    {
+                        currentPosition = ((currentPosition / 8) + 1) * 8; // Need to remember that wave64 stuff always needs to be aligned on 8 byte boundaries!
+                    }
                     chunk = readChunkWave64(currentPosition); // TODO gracefully handle error if no data chunk exists. Currently would crash.
                     resultPosition = currentPosition;
                     currentPosition += 24 + chunk.size;
@@ -829,9 +837,16 @@ namespace SinusLab
             retVal.size = br.ReadUInt32();
             return retVal;
         }
+
+
         private ChunkInfo readChunkWave64(UInt64 position)
         {
             checkClosed();
+
+            /*if(position % 8 != 0)
+            {
+                position = ((position / 8) + 1) * 8; // Need to remember that wave64 stuff always needs to be aligned on 8 byte boundaries!
+            }*/ // Decided not to do that here because its too convenient and will introduce sneaky errors in the end ... better to catch it right in teh code.
 
             br.BaseStream.Seek((Int64)position,SeekOrigin.Begin);
             ChunkInfo retVal = new ChunkInfo();
