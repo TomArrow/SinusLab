@@ -5,37 +5,111 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SinusLab"
         mc:Ignorable="d"
-        Title="SinusLab" Height="450" Width="800">
+        Title="SinusLab" Height="600" Width="800">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition></ColumnDefinition>
-            <ColumnDefinition Width="200"></ColumnDefinition>
+            <ColumnDefinition Width="400"></ColumnDefinition>
         </Grid.ColumnDefinitions>
 
         <StackPanel Grid.Column="1">
             <GroupBox Header="Images">
-                <StackPanel>
-                    <Button x:Name="btnImageToRaw" Click="btnImageToRaw_Click">Image to .raw audio</Button>
-                    <Button x:Name="btnImageToWav" Click="btnImageToWav_Click">Image to .wav audio</Button>
-                    <Button x:Name="btnImageToWavV2" Click="btnImageToWavV2_Click">Image to .wav audio (V2)</Button>
-                    <Button x:Name="btnLoadReferenceImage" Click="btnLoadReferenceImage_Click">Load reference image</Button>
-                    <StackPanel x:Name="buttonsWavToImage" IsEnabled="False">
-                        <Button x:Name="btnRawToImage" Click="btnRawToImage_Click">.raw audio to image</Button>
-                        <Button x:Name="btnWavToImage" Click="btnWavToImage_Click">.wav audio to image</Button>
-                        <Button x:Name="btnWavToImageV2" Click="btnWavToImageV2_Click">.wav audio to image (V2)</Button>
-                        <Button x:Name="btnWavToImageV2NoLFLuma" Click="btnWavToImageV2NoLFLuma_Click">.wav audio to image (V2 noluma)</Button>
-                        <Button x:Name="btnWavToImageFast" Click="btnWavToImageFast_Click">.wav audio to image (fast)</Button>
-                    </StackPanel>
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition></ColumnDefinition>
+                        <ColumnDefinition></ColumnDefinition>
+                    </Grid.ColumnDefinitions>
+                    <GroupBox Header="Image to audio" Grid.Column="0">
+                        <StackPanel>
+                            <GroupBox Header="V1">
+                                <StackPanel>
+
+                                    <Button x:Name="btnImageToRaw" Click="btnImageToRaw_Click">Image to .raw audio</Button>
+                                    <Button x:Name="btnImageToWav" Click="btnImageToWav_Click">Image to .wav audio</Button>
+
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="V2">
+                                <StackPanel>
+                                    <Button x:Name="btnImageToWavV2" Click="btnImageToWavV2_Click">Image to .wav audio (V2)</Button>
+                                </StackPanel>
+                            </GroupBox>
+
+                        </StackPanel>
+                    </GroupBox>
+                    <GroupBox Header="Audio to image" Grid.Column="1">
+                        <StackPanel>
+                            <Button x:Name="btnLoadReferenceImage" Click="btnLoadReferenceImage_Click">Load reference image</Button>
+                            <StackPanel x:Name="buttonsWavToImage" IsEnabled="False">
+                                <TextBlock TextWrapping="Wrap">Input must be normal LPCM or float .wav, RF64 .wav or .w64</TextBlock>
+                                <GroupBox Header="V1">
+                                    <StackPanel>
+                                        <Button x:Name="btnRawToImage" Click="btnRawToImage_Click">from .raw float audio</Button>
+                                        <Button x:Name="btnWavToImage" Click="btnWavToImage_Click">normal/HQ</Button>
+                                        <Button x:Name="btnWavToImageFast" Click="btnWavToImageFast_Click">fast</Button>
+                                    </StackPanel>
+                                </GroupBox>
+                                <GroupBox Header="V2">
+                                    <StackPanel>
+
+                                        <Button x:Name="btnWavToImageV2" Click="btnWavToImageV2_Click">normal/HQ</Button>
+                                        <Button x:Name="btnWavToImageV2NoLFLuma" Click="btnWavToImageV2NoLFLuma_Click">normal/HQ (don't rescue luma)</Button>
+                                        <Button x:Name="btnWavToImageV2Fast" Click="btnWavToImageV2Fast_Click">fast</Button>
+                                        <Button x:Name="btnWavToImageV2FastNoFLLuma" Click="btnWavToImageV2FastNoFLLuma_Click">fast (don't rescue luma)</Button>
+                                        <Button x:Name="btnWavToImageV2UltraQuality" IsEnabled="False">ultra high quality</Button>
+                                    </StackPanel>
+                                </GroupBox>
+
+                            </StackPanel>
+                        </StackPanel>
+                        
+                    </GroupBox>
+                    
+                </Grid>
+                
             </GroupBox>
             <GroupBox Header="Videos">
-                <StackPanel>
-                    <Button x:Name="btnVideoToW64" Click="btnVideoToW64_Click">Video to .w64 audio</Button>
-                    <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
-                    <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" IsEnabled="False">.w64 to video</Button>
-                    <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click" IsEnabled="False">.w64 to video (fast)</Button>
-                    <Button x:Name="btnW64ToVideoFastAsync" Click="btnW64ToVideoFastAsync_Click" IsEnabled="False">.w64 to video (fast,multithread)</Button>
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition></ColumnDefinition>
+                        <ColumnDefinition></ColumnDefinition>
+                    </Grid.ColumnDefinitions>
+                    <GroupBox Header="Video to audio" Grid.Column="0">
+                        <StackPanel>
+                            <GroupBox Header="V1">
+                                <StackPanel>
+                                    <Button x:Name="btnVideoToW64" Click="btnVideoToW64_Click">Video to .w64 audio</Button>
+                                </StackPanel>
+                            </GroupBox>
+                            <GroupBox Header="V2">
+                                <StackPanel>
+                                    <Button x:Name="btnVideoToW64V2" Click="btnVideoToW64V2_Click">Video to .w64 audio</Button>
+                                </StackPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </GroupBox>
+                    <GroupBox Header="Audio to video" Grid.Column="1">
+                        <StackPanel>
+                            <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
+                            <StackPanel IsEnabled="False" x:Name="buttonsAudioToVideo">
+
+                                <GroupBox Header="V1">
+                                    <StackPanel>
+                                        <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" >.w64 to video</Button>
+                                        <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click">.w64 to video (fast)</Button>
+                                        <Button x:Name="btnW64ToVideoFastAsync" Click="btnW64ToVideoFastAsync_Click">.w64 to video (fast,multithread)</Button>
+                                    </StackPanel>
+                                </GroupBox>
+                                <GroupBox Header="V2">
+                                    <StackPanel>
+                                        <Button x:Name="btnW64ToVideoFastAsyncV2" Click="btnW64ToVideoFastAsyncV2_Click" >fast, multithr.</Button>
+                                        <Button x:Name="btnW64ToVideoFastAsyncV2NoLuma" Click="btnW64ToVideoFastAsyncV2NoLuma_Click">fast, multithr. (no rescue luma)</Button>
+                                    </StackPanel>
+                                </GroupBox>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+                </Grid>
             </GroupBox>
         </StackPanel>
     </Grid>

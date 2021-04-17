@@ -264,24 +264,33 @@ namespace SinusLab
                         Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                     }
 
+                    SpeedReport mySpeedReport = new SpeedReport();
+                    mySpeedReport.setPrefix("wavToImage");
                     byte[] output;
                     switch (formatVersion)
                     {
                         case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
-                            output = core.StereoToRGB24V2(srcDataByte,false);
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false); 
                             break;
                         case SinusLabCore.SinusLabFormatVersion.V2:
-                            output = core.StereoToRGB24V2(srcDataByte);
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, true, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte);
                             break;
                         case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
                         default:
                             output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
                             break;
                     }
-                    
+                    mySpeedReport.setPrefix("wavToImage");
+                    mySpeedReport.logEvent("Processing done.");
+
+
                     LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, referenceImageHusk);
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                     imgBitmap.Save(sfd.FileName);
+
+                    mySpeedReport.logEvent("Converted to Bitmap & saved");
+                    mySpeedReport.Stop();
+                    MessageBox.Show(mySpeedReport.getFormattedList());
                 }
             }
         }
@@ -373,7 +382,7 @@ namespace SinusLab
         Accord.Math.Rational videoFrameRate = 24;
         LinearAccessByteImageUnsignedHusk videoReferenceFrame = null;
 
-        private void videoToW64()
+        private void videoToW64(SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select a video";
@@ -382,7 +391,20 @@ namespace SinusLab
             {
 
                 SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm.w64";
+
+                string suffix = "";
+                switch (formatVersion)
+                {
+                    case SinusLabCore.SinusLabFormatVersion.V2:
+                        suffix = "V2";
+                        break;
+                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    default:
+                        suffix = "V1";
+                        break;
+                }
+
+                sfd.FileName = ofd.FileName + ".sinuslab.2audio16pcm"+ suffix + ".w64";
                 if (sfd.ShowDialog() == true)
                 {
                     long frameCount;
@@ -409,10 +431,11 @@ namespace SinusLab
                         //loadedVideo = new LinearAccessByteImage[frameCount];
                         videoFrameRate = reader.FrameRate;
 
-                        videoReferenceFrame = null;
-                        btnW64ToVideo.IsEnabled = false;
-                        btnW64ToVideoFast.IsEnabled = false;
-                        btnW64ToVideoFastAsync.IsEnabled = false;
+                        //videoReferenceFrame = null;
+                        //btnW64ToVideo.IsEnabled = false;
+                        //btnW64ToVideoFast.IsEnabled = false;
+                        //btnW64ToVideoFastAsync.IsEnabled = false;
+                        buttonsAudioToVideo.IsEnabled = false;
 
                         using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, 48000, 2, SuperWAV.AudioFormat.LPCM, 16))
                         {
@@ -431,12 +454,23 @@ namespace SinusLab
                                     {
 
                                         videoReferenceFrame = frameData.toHusk();
-                                        btnW64ToVideo.IsEnabled = true;
-                                        btnW64ToVideoFast.IsEnabled = true;
-                                        btnW64ToVideoFastAsync.IsEnabled = true;
+                                        //btnW64ToVideo.IsEnabled = true;
+                                        //btnW64ToVideoFast.IsEnabled = true;
+                                        //btnW64ToVideoFastAsync.IsEnabled = true;
+                                        buttonsAudioToVideo.IsEnabled = true;
                                     }
 
-                                    byte[] audioData = core.RGB24ToStereo(frameData.imageData);
+                                    byte[] audioData = new byte[1];
+                                    switch (formatVersion)
+                                    {
+                                        case SinusLabCore.SinusLabFormatVersion.V2:
+                                            audioData = core.RGB24ToStereoV2(frameData.imageData);
+                                            break;
+                                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                                        default:
+                                            audioData = core.RGB24ToStereo(frameData.imageData);
+                                            break;
+                                    }
 
                                     float[] audioDataFloat = new float[audioData.Length / 4];
 
@@ -525,9 +559,10 @@ namespace SinusLab
 
 
                         videoReferenceFrame = frameData.toHusk();
-                        btnW64ToVideo.IsEnabled = true;
-                        btnW64ToVideoFast.IsEnabled = true;
-                        btnW64ToVideoFastAsync.IsEnabled = true;
+                        //btnW64ToVideo.IsEnabled = true;
+                        //btnW64ToVideoFast.IsEnabled = true;
+                        //btnW64ToVideoFastAsync.IsEnabled = true;
+                        buttonsAudioToVideo.IsEnabled = true;
 
                         /*if (currentFrame % 1000 == 0)
                         {
@@ -554,9 +589,10 @@ namespace SinusLab
                     //failed = true;
                     MessageBox.Show(e.Message);
                     videoReferenceFrame = null;
-                    btnW64ToVideo.IsEnabled = false;
-                    btnW64ToVideoFast.IsEnabled = false;
-                    btnW64ToVideoFastAsync.IsEnabled = false;
+                    //btnW64ToVideo.IsEnabled = false;
+                    //btnW64ToVideoFast.IsEnabled = false;
+                    //btnW64ToVideoFastAsync.IsEnabled = false;
+                    buttonsAudioToVideo.IsEnabled = false;
                 }
                 
             }
@@ -650,7 +686,7 @@ namespace SinusLab
             }
         }
         
-        private async void w64ToVideoMultiThreadedAsync(bool fast = false)
+        private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
         {
             if(videoReferenceFrame == null)
             {
@@ -668,7 +704,23 @@ namespace SinusLab
             if (ofd.ShowDialog() == true)
             {
                 SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24.mkv";
+
+                string suffix = "";
+                switch (formatVersion)
+                {
+                    case SinusLabCore.SinusLabFormatVersion.V2:
+                        suffix = "V2";
+                        break;
+                    case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                        suffix = "V2noLum";
+                        break;
+                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    default:
+                        suffix = "V1";
+                        break;
+                }
+
+                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+suffix+".mkv";
                 if (sfd.ShowDialog() == true)
                 {
 
@@ -682,7 +734,24 @@ namespace SinusLab
                             byte[] srcDataByte = new byte[audioData.Length * 4];
                             Buffer.BlockCopy(audioData, 0, srcDataByte, 0, srcDataByte.Length);
                             audioData = null;
-                            byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+
+                            byte[] output;
+                            switch (formatVersion)
+                            {
+                                case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false) : core.StereoToRGB24V2(srcDataByte, false);
+                                    break;
+                                case SinusLabCore.SinusLabFormatVersion.V2:
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte) : core.StereoToRGB24V2(srcDataByte);
+                                    break;
+                                case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                                default:
+                                    output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                                    break;
+                            }
+                            //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+
+
                             srcDataByte = null;
                             LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                             Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
@@ -859,6 +928,32 @@ namespace SinusLab
         private void btnWavToImageV2NoLFLuma_Click(object sender, RoutedEventArgs e)
         {
             wavToImage(false, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
+        }
+
+        private void btnWavToImageV2Fast_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(true, SinusLabCore.SinusLabFormatVersion.V2);
+        }
+
+        private void btnWavToImageV2FastNoFLLuma_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(true, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
+        }
+
+        private void btnVideoToW64V2_Click(object sender, RoutedEventArgs e)
+        {
+
+            videoToW64(SinusLabCore.SinusLabFormatVersion.V2);
+        }
+
+        private void btnW64ToVideoFastAsyncV2_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(true,SinusLabCore.SinusLabFormatVersion.V2);
+        }
+
+        private void btnW64ToVideoFastAsyncV2NoLuma_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(true, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
         }
     }
 }
