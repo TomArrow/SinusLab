@@ -56,7 +56,7 @@
                                         <Button x:Name="btnWavToImageV2NoLFLuma" Click="btnWavToImageV2NoLFLuma_Click">normal/HQ (don't rescue luma)</Button>
                                         <Button x:Name="btnWavToImageV2Fast" Click="btnWavToImageV2Fast_Click">fast</Button>
                                         <Button x:Name="btnWavToImageV2FastNoFLLuma" Click="btnWavToImageV2FastNoFLLuma_Click">fast (don't rescue luma)</Button>
-                                        <Button x:Name="btnWavToImageV2UltraQuality" IsEnabled="False">ultra high quality</Button>
+                                        <Button x:Name="btnWavToImageV2FastUltraQuality" Click="btnWavToImageV2FastUltraQuality_Click">fast ultra high quality hybrid</Button>
                                     </StackPanel>
                                 </GroupBox>
 

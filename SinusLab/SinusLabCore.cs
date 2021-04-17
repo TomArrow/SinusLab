@@ -88,9 +88,15 @@ namespace SinusLab
         double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
 
+        public enum LowFrequencyLumaCompensationMode
+        {
+            MULTIPLY,
+            OFFSET
+        }
+
         public int windowSize = 32;
 
-        public enum SinusLabFormatVersion {
+        public enum FormatVersion {
             DEFAULT_LEGACY = 0,
             V2 = 1, 
             V2_NOLUMA_DECODE_ONLY = 2
@@ -612,7 +618,7 @@ namespace SinusLab
         }
 
 
-        public byte[] StereoToRGB24V2Fast(byte[] sourceData, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleRateInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, SpeedReport speedReport = null)
+        public byte[] StereoToRGB24V2Fast(byte[] sourceData, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleRateInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null)
         {
 
             if (speedReport != null)
@@ -620,12 +626,12 @@ namespace SinusLab
                 speedReport.setPrefix("StereoToRGB24V2Fast");
             }
 
-            if (superHighQuality)
+            /*if (superHighQuality)
             {
                 throw new Exception("Super high quality currently not implemented properly in fast version.");
             }
             superHighQuality = false;// Currently doesnt work in the Fast version of this function. 
-
+            */
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
 
@@ -635,19 +641,19 @@ namespace SinusLab
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
 
             double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
-            //double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
             if (decodeLFLuma)
             {
-                //decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
+                decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
                 for (int i = 0; i < decodeL.Length; i++)
                 {
                     decodeL[i] = BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
                     decode[i + windowSize / 2/*+ windowSize*/] = BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
-                //Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
+                Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
@@ -693,7 +699,6 @@ namespace SinusLab
 
             //Vector3[] outputBuffer = new Vector3[decodeL.Length];
             //double decodedLFLuma;
-            double lumaFixRatio;
 
             double[] decodedLFLuma = new double[decodeL.Length];
             double[] decodedC = new double[decodeL.Length];
@@ -704,8 +709,10 @@ namespace SinusLab
 
             // fftMagnitudeInterpolateHere will be interpolated from fftMagniLast and fftMagnitudeNext
             double[] fftMagnitudeLast = null;
+            double[] fftMagnitudeLastLFLuma = null;
             uint fftMagnitudeLastIndex = 0;
             double[] fftMagnitudeNext = null;
+            double[] fftMagnitudeNextLFLuma = null;
             uint fftMagnitudeNextIndex = fftSamplingDistance;
             //double[] fftMagnitude = new double[freqs.Length];
             bool reachedNextInterpolationStep = false;
@@ -737,6 +744,11 @@ namespace SinusLab
                 {
                     fftMagnitudeLast = (double[])fftMagnitudeNext.Clone();
                     fftMagnitudeNext = null;
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        fftMagnitudeLastLFLuma = (double[])fftMagnitudeNextLFLuma.Clone();
+                        fftMagnitudeNextLFLuma = null;
+                    }
                 }
                 if (fftMagnitudeLast == null)
                 {
@@ -744,6 +756,12 @@ namespace SinusLab
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeLast = FftSharp.Transform.FFTmagnitude(audioPart);
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        Array.Copy(decodeForLFLuma, fftMagnitudeLastIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
+                        FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
+                        fftMagnitudeLastLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
+                    }
                 }
                 if (fftMagnitudeNext == null)
                 {
@@ -751,6 +769,12 @@ namespace SinusLab
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeNext = FftSharp.Transform.FFTmagnitude(audioPart);
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        Array.Copy(decodeForLFLuma, fftMagnitudeNextIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
+                        FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
+                        fftMagnitudeNextLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
+                    }
                 }
 
                 // Now interpolate
@@ -759,10 +783,18 @@ namespace SinusLab
                 if (distanceToLast == 0)
                 {
                     fftMagnitude = (double[])fftMagnitudeLast.Clone();
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        fftMagnitudeForLFLuma = (double[])fftMagnitudeLastLFLuma.Clone();
+                    }
                 }
-                else if (distanceToNext == 0)
+                else if (distanceToNext == 0) // does this ever even happen?
                 {
                     fftMagnitude = (double[])fftMagnitudeNext.Clone();
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        fftMagnitudeForLFLuma = (double[])fftMagnitudeNextLFLuma.Clone();
+                    }
                 }
                 else
                 {
@@ -773,6 +805,14 @@ namespace SinusLab
                     for (uint b = 0; b < freqs.Length; b++)
                     {
                         fftMagnitude[b] = lastRatio * fftMagnitudeLast[b] + nextRatio * fftMagnitudeNext[b];
+                    }
+                    if (decodeLFLuma && superHighQuality)
+                    {
+                        fftMagnitudeForLFLuma = new double[freqs.Length];
+                        for (uint b = 0; b < freqs.Length; b++)
+                        {
+                            fftMagnitudeForLFLuma[b] = lastRatio * fftMagnitudeLastLFLuma[b] + nextRatio * fftMagnitudeNextLFLuma[b];
+                        }
                     }
                 }
 
@@ -961,19 +1001,41 @@ namespace SinusLab
                     speedReport.logEvent("Luma smoothing.");
                 }
 
-                for (int i = 0; i < decodeL.Length; i++)
+                if(compensationMode == LowFrequencyLumaCompensationMode.MULTIPLY)
                 {
 
-                    lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
-                    tmpV.X = (float)(decodeL[i] * lumaFixRatio);
-                    tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
-                    tmpV.Z = (float)decodedH[i];
+                    double lumaFixRatio;
+                    for (int i = 0; i < decodeL.Length; i++)
+                    {
 
-                    tmpV = Helpers.CIELChabTosRGB(tmpV);
+                        lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
+                        tmpV.X = (float)(decodeL[i] * lumaFixRatio);
+                        tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                        tmpV.Z = (float)decodedH[i];
 
-                    output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
-                    output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
-                    output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                        tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                        output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                        output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                        output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                    }
+                } else
+                {
+                    double lumaFixOffset;
+                    for (int i = 0; i < decodeL.Length; i++)
+                    {
+
+                        lumaFixOffset = smoothedLFLuma[i] - smoothedLuma[i];
+                        tmpV.X = (float)(decodeL[i] + lumaFixOffset);
+                        tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                        tmpV.Z = (float)decodedH[i];
+
+                        tmpV = Helpers.CIELChabTosRGB(tmpV);
+
+                        output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                        output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                        output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                    }
                 }
             } else
             {

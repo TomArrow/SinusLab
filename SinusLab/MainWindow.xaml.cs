@@ -227,7 +227,7 @@ namespace SinusLab
             wavToImage();
         }
         
-        private void wavToImage(bool fast = false,SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
+        private void wavToImage(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY,bool superHighQuality = false)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select wav file coresponding to the loaded reference image";
@@ -239,16 +239,20 @@ namespace SinusLab
                 string suffix = "";
                 switch (formatVersion)
                 {
-                    case SinusLabCore.SinusLabFormatVersion.V2:
+                    case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                    case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
                         suffix = "V2noLum";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                     default:
                         suffix = "V1";
                         break;
+                }
+                if (superHighQuality)
+                {
+                    suffix += "UHQ";
                 }
 
                 sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+ suffix + ".png";
@@ -269,13 +273,13 @@ namespace SinusLab
                     byte[] output;
                     switch (formatVersion)
                     {
-                        case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false); 
+                        case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false, superHighQuality); 
                             break;
-                        case SinusLabCore.SinusLabFormatVersion.V2:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, true, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte);
+                        case SinusLabCore.FormatVersion.V2:
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, true, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, true, superHighQuality);
                             break;
-                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                        case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                         default:
                             output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
                             break;
@@ -300,7 +304,7 @@ namespace SinusLab
             imageToWav();
         }
 
-        private void imageToWav(SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
+        private void imageToWav(SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select an RGB24 image";
@@ -313,10 +317,10 @@ namespace SinusLab
                 string suffix = "";
                 switch (formatVersion)
                 {
-                    case SinusLabCore.SinusLabFormatVersion.V2:
+                    case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                     default:
                         suffix = "V1";
                         break;
@@ -350,10 +354,10 @@ namespace SinusLab
                     byte[] audioData;
                     switch (formatVersion)
                     {
-                        case SinusLabCore.SinusLabFormatVersion.V2:
+                        case SinusLabCore.FormatVersion.V2:
                             audioData = core.RGB24ToStereoV2(byteImg.imageData);
                             break;
-                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                        case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                         default:
                             audioData = core.RGB24ToStereo(byteImg.imageData);
                             break;
@@ -382,7 +386,7 @@ namespace SinusLab
         Accord.Math.Rational videoFrameRate = 24;
         LinearAccessByteImageUnsignedHusk videoReferenceFrame = null;
 
-        private void videoToW64(SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
+        private void videoToW64(SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Select a video";
@@ -395,10 +399,10 @@ namespace SinusLab
                 string suffix = "";
                 switch (formatVersion)
                 {
-                    case SinusLabCore.SinusLabFormatVersion.V2:
+                    case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                     default:
                         suffix = "V1";
                         break;
@@ -463,10 +467,10 @@ namespace SinusLab
                                     byte[] audioData = new byte[1];
                                     switch (formatVersion)
                                     {
-                                        case SinusLabCore.SinusLabFormatVersion.V2:
+                                        case SinusLabCore.FormatVersion.V2:
                                             audioData = core.RGB24ToStereoV2(frameData.imageData);
                                             break;
-                                        case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                                        case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                         default:
                                             audioData = core.RGB24ToStereo(frameData.imageData);
                                             break;
@@ -686,7 +690,7 @@ namespace SinusLab
             }
         }
         
-        private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.SinusLabFormatVersion formatVersion = SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY)
+        private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
         {
             if(videoReferenceFrame == null)
             {
@@ -708,13 +712,13 @@ namespace SinusLab
                 string suffix = "";
                 switch (formatVersion)
                 {
-                    case SinusLabCore.SinusLabFormatVersion.V2:
+                    case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                    case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
                         suffix = "V2noLum";
                         break;
-                    case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                    case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                     default:
                         suffix = "V1";
                         break;
@@ -738,13 +742,13 @@ namespace SinusLab
                             byte[] output;
                             switch (formatVersion)
                             {
-                                case SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY:
+                                case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
                                     output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false) : core.StereoToRGB24V2(srcDataByte, false);
                                     break;
-                                case SinusLabCore.SinusLabFormatVersion.V2:
+                                case SinusLabCore.FormatVersion.V2:
                                     output = fast ? core.StereoToRGB24V2Fast(srcDataByte) : core.StereoToRGB24V2(srcDataByte);
                                     break;
-                                case SinusLabCore.SinusLabFormatVersion.DEFAULT_LEGACY:
+                                case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
                                     output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
                                     break;
@@ -917,43 +921,48 @@ namespace SinusLab
 
         private void btnImageToWavV2_Click(object sender, RoutedEventArgs e)
         {
-            imageToWav(SinusLabCore.SinusLabFormatVersion.V2);
+            imageToWav(SinusLabCore.FormatVersion.V2);
         }
 
         private void btnWavToImageV2_Click(object sender, RoutedEventArgs e)
         {
-            wavToImage(false,SinusLabCore.SinusLabFormatVersion.V2);
+            wavToImage(false,SinusLabCore.FormatVersion.V2);
         }
 
         private void btnWavToImageV2NoLFLuma_Click(object sender, RoutedEventArgs e)
         {
-            wavToImage(false, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
+            wavToImage(false, SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY);
         }
 
         private void btnWavToImageV2Fast_Click(object sender, RoutedEventArgs e)
         {
-            wavToImage(true, SinusLabCore.SinusLabFormatVersion.V2);
+            wavToImage(true, SinusLabCore.FormatVersion.V2);
         }
 
         private void btnWavToImageV2FastNoFLLuma_Click(object sender, RoutedEventArgs e)
         {
-            wavToImage(true, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
+            wavToImage(true, SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY);
         }
 
         private void btnVideoToW64V2_Click(object sender, RoutedEventArgs e)
         {
 
-            videoToW64(SinusLabCore.SinusLabFormatVersion.V2);
+            videoToW64(SinusLabCore.FormatVersion.V2);
         }
 
         private void btnW64ToVideoFastAsyncV2_Click(object sender, RoutedEventArgs e)
         {
-            w64ToVideoMultiThreadedAsync(true,SinusLabCore.SinusLabFormatVersion.V2);
+            w64ToVideoMultiThreadedAsync(true,SinusLabCore.FormatVersion.V2);
         }
 
         private void btnW64ToVideoFastAsyncV2NoLuma_Click(object sender, RoutedEventArgs e)
         {
-            w64ToVideoMultiThreadedAsync(true, SinusLabCore.SinusLabFormatVersion.V2_NOLUMA_DECODE_ONLY);
+            w64ToVideoMultiThreadedAsync(true, SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY);
+        }
+
+        private void btnWavToImageV2FastUltraQuality_Click(object sender, RoutedEventArgs e)
+        {
+            wavToImage(true, SinusLabCore.FormatVersion.V2,true);
         }
     }
 }
