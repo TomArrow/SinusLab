@@ -1028,75 +1028,28 @@ namespace SinusLab
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                bool[] qualityLevelsFinished = new bool[3];
+                byte[] output;
 
-                // Ultra low quality version
-                Task.Run(()=> {
-                    byte[] output;
-                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 32, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                output = core.StereoToRGB24V2Fast(srcDataByte,previewDecodeLuma,false,0.5,false,false,8,SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,null,cancellationToken);
 
-                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
-                    output = null;
-                    qualityLevelsFinished[0] = true;
-                    if (qualityLevelsFinished[1] || qualityLevelsFinished[2])
+                cancellationToken.ThrowIfCancellationRequested();
+                //srcDataByte = null;
+                LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                output = null;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                Dispatcher.Invoke(()=> {
+                    Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                    image = null;
+                    if (cancellationToken.IsCancellationRequested)
                     {
-                        throw new TaskCanceledException(); // Don't bother if higher quality is already finished ...
+                        imgBitmap.Dispose();
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    Dispatcher.Invoke(() => {
-                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
-                        image = null;
-                        cancellationToken.ThrowIfCancellationRequested();
-                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
-                        imgBitmap.Dispose();
-                    });
-                },cancellationToken);
-                // Low quality version
-                Task.Run(()=> {
-                    byte[] output;
-                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
-
-                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
-                    output = null;
-
-                    qualityLevelsFinished[1] = true;
-                    if (qualityLevelsFinished[2])
-                    {
-                        throw new TaskCanceledException(); // Don't bother if high quality is already finished ...
-                    }
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    Dispatcher.Invoke(() => {
-                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
-                        image = null;
-                        cancellationToken.ThrowIfCancellationRequested();
-                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
-                        imgBitmap.Dispose();
-                    });
-                },cancellationToken);
-
-                // High  quality version
-                Task.Run(()=> {
-                    byte[] output;
-                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
-
-                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
-                    output = null;
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    Dispatcher.Invoke(() => {
-                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
-                        image = null;
-                        cancellationToken.ThrowIfCancellationRequested();
-                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
-                        imgBitmap.Dispose();
-                    });
-                },cancellationToken);
-
-
-
-                
+                    previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                });
+                cancellationToken.ThrowIfCancellationRequested();
                 /*
                 // Now for he mid quality version:
                 output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
@@ -1107,17 +1060,23 @@ namespace SinusLab
                     image = null;
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
-                });
+                });*/
                 // Now for he high quality version:
                 output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
-                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
                 output = null;
+                cancellationToken.ThrowIfCancellationRequested();
                 Dispatcher.Invoke(() => {
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                     image = null;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        imgBitmap.Dispose();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
-                });*/
+                });
 
             }, cancellationToken);
 
