@@ -18,6 +18,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Accord.Video.FFMPEG;
+using System.Threading;
 
 namespace SinusLab
 {
@@ -29,6 +30,7 @@ namespace SinusLab
 
         SinusLabCore core = new SinusLabCore();
 
+        private bool isInitialized = false;
         public MainWindow()
         {
             InitializeComponent();
@@ -39,8 +41,18 @@ namespace SinusLab
             myWav[1] = new double[2] { 0.0, 0.0 };
             myWav[2] = new double[2] { -0.5, -1.0};*/
 
-            ThreadTests();
-            
+            //ThreadTests();
+
+            isInitialized = true;
+
+        }
+
+        ~MainWindow()
+        {
+            if (previewWaveSource != null)
+            {
+                previewWaveSource.Dispose();
+            }
         }
 
         private async void ThreadTests()
@@ -419,6 +431,7 @@ namespace SinusLab
 
                         VideoFileReader reader = new VideoFileReader();
                         reader.Open(ofd.FileName);
+
 
                         /*
                         Console.WriteLine("width:  " + reader.Width);
@@ -963,6 +976,226 @@ namespace SinusLab
         private void btnWavToImageV2FastUltraQuality_Click(object sender, RoutedEventArgs e)
         {
             wavToImage(true, SinusLabCore.FormatVersion.V2,true);
+        }
+
+
+
+
+        private void updateSettings()
+        {
+            if (!isInitialized)
+            {
+                return; // If the window hasn't fully finished loading yet, don't try to read elements or it might cause an exception or unpredictable errors
+            }
+
+            core.decodeGainMultiplier = Math.Pow(2,gainSlider.Value);
+            previewDecodeLuma = checkboxPreviewLFLumaDecode.IsChecked == true;
+            previewFrameIndex = (UInt64)frameSlider.Value;
+        }
+
+        bool previewDecodeLuma = true;
+        UInt64 previewFrameIndex = 0;
+        SuperWAV previewWaveSource = null;
+        Task previewDrawingTask = null;
+        CancellationTokenSource previewDrawingCancellationTokenSource = null;
+
+        private async void redrawPreview(bool fast = false, SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
+        {
+            if (previewWaveSource == null)
+            {
+                return;
+            }
+            if(previewDrawingTask != null)
+            {
+                if (!previewDrawingTask.IsCompleted)
+                {
+                    previewDrawingCancellationTokenSource.Cancel();
+                    previewDrawingCancellationTokenSource = null;
+                }
+            }
+            previewDrawingCancellationTokenSource = new CancellationTokenSource();
+            CancellationToken cancellationToken = previewDrawingCancellationTokenSource.Token;
+
+            UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
+            float[] srcData = previewWaveSource.getAs32BitFloatFast(imageLength * previewFrameIndex, imageLength * (previewFrameIndex + 1) - 1);
+
+
+            previewDrawingTask = Task.Run(()=> {
+
+                byte[] srcDataByte = new byte[srcData.Length * 4];
+                Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
+                srcData = null;
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                bool[] qualityLevelsFinished = new bool[3];
+
+                // Ultra low quality version
+                Task.Run(()=> {
+                    byte[] output;
+                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 32, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+
+                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                    output = null;
+                    qualityLevelsFinished[0] = true;
+                    if (qualityLevelsFinished[1] || qualityLevelsFinished[2])
+                    {
+                        throw new TaskCanceledException(); // Don't bother if higher quality is already finished ...
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    Dispatcher.Invoke(() => {
+                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                        image = null;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                        imgBitmap.Dispose();
+                    });
+                },cancellationToken);
+                // Low quality version
+                Task.Run(()=> {
+                    byte[] output;
+                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+
+                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                    output = null;
+
+                    qualityLevelsFinished[1] = true;
+                    if (qualityLevelsFinished[2])
+                    {
+                        throw new TaskCanceledException(); // Don't bother if high quality is already finished ...
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    Dispatcher.Invoke(() => {
+                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                        image = null;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                        imgBitmap.Dispose();
+                    });
+                },cancellationToken);
+
+                // High  quality version
+                Task.Run(()=> {
+                    byte[] output;
+                    output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+
+                    LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                    output = null;
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    Dispatcher.Invoke(() => {
+                        Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                        image = null;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                        imgBitmap.Dispose();
+                    });
+                },cancellationToken);
+
+
+
+                
+                /*
+                // Now for he mid quality version:
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                output = null;
+                Dispatcher.Invoke(() => {
+                    Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                    image = null;
+                    previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                    imgBitmap.Dispose();
+                });
+                // Now for he high quality version:
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                output = null;
+                Dispatcher.Invoke(() => {
+                    Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                    image = null;
+                    previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                    imgBitmap.Dispose();
+                });*/
+
+            }, cancellationToken);
+
+        }
+
+        private void gainSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            updateSettings();
+            redrawPreview(); 
+        }
+
+        private void btnLoadVideoIntoPreviewV2_Click(object sender, RoutedEventArgs e)
+        {
+            loadvideoIntoPreview();
+        }
+
+        private void loadvideoIntoPreview()
+        {
+            if (videoReferenceFrame == null)
+            {
+                MessageBox.Show("No reference video loaded.");
+                return;
+            }
+
+            if(previewWaveSource != null)
+            {
+                previewWaveSource.Dispose(); // Make sure to not leak memory or keep file handles open when opening a new wave file.
+            }
+
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Select w64 file coresponding to the loaded reference video";
+
+            if (ofd.ShowDialog() == true)
+            {
+
+                UInt64 frameCount;
+#if !DEBUG
+                try
+                {
+#endif
+                previewWaveSource = new SuperWAV(ofd.FileName);
+                
+
+                UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
+                frameCount = previewWaveSource.DataLengthInTicks / (imageLength);
+
+                frameSlider.Maximum = frameCount - 1;
+                frameSlider.Value = 0; // This will automatically call RedrawPreview()
+
+#if !DEBUG
+                }
+                catch (Exception e)
+                {
+                    MessageBox.Show(e.Message);
+                }
+#endif
+
+                redrawPreview();
+            }
+        }
+
+        private void checkboxPreviewLFLumaDecode_Checked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void checkboxPreviewLFLumaDecode_Unchecked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void frameSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            updateSettings();
+            redrawPreview();
         }
     }
 }
