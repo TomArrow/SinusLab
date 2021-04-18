@@ -90,6 +90,9 @@ namespace SinusLab
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
 
         public double decodeGainMultiplier = 1.0;
+        public double decodeChromaGainMultiplier = 1.0;
+        public double decodeLumaGainMultiplier = 1.0;
+        public double decodeLFLumaGainMultiplier = 1.0;
 
         public enum LowFrequencyLumaCompensationMode
         {
@@ -267,8 +270,8 @@ namespace SinusLab
 
             for (int i = 0; i < decodeL.Length; i++)
             {
-                decodeL[i] = decodeGainMultiplier*BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier*BitConverter.ToSingle(sourceData, i * 4 * 2);
+                decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
             double[] audioPart = new double[windowSize];
@@ -367,18 +370,18 @@ namespace SinusLab
                 decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
                 for (int i = 0; i < decodeL.Length; i++)
                 {
-                    decodeL[i] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
                 Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
                 {
-                    decodeL[i] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
             
@@ -479,10 +482,10 @@ namespace SinusLab
                 //decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
                 if (superHighQuality)
                 {
-                    decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier/decodeChromaGainMultiplier* 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
                 } else
                 {
-                    decodedLFLuma[i] = 0.6 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 0.6 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
                 }
                 
                 // For Window size 128: [1] is 0.16735944031697095  [2] is 0.13069097631912735
@@ -652,18 +655,18 @@ namespace SinusLab
                 decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
                 for (int i = 0; i < decodeL.Length; i++)
                 {
-                    decodeL[i] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = decodeLumaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
                 Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
                 {
-                    decodeL[i] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = ( decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
             
@@ -878,10 +881,10 @@ namespace SinusLab
                 //decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
                 if (superHighQuality)
                 {
-                    decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
                 } else
                 {
-                    decodedLFLuma[i] = 0.63 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier *  0.63 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
                 }
                 if(decodedLFLuma[i] > highestLFLumaValue)
                 {
@@ -1127,8 +1130,8 @@ namespace SinusLab
 
             for (int i = 0; i < decodeL.Length; i++)
             {
-                decodeL[i] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decode[i + windowSize / 2/*+ windowSize*/] = decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decodeL[i] = decodeLumaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
             double[] audioPart = new double[windowSize];

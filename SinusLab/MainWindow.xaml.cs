@@ -994,6 +994,9 @@ namespace SinusLab
             }
 
             core.decodeGainMultiplier = Math.Pow(2,gainSlider.Value);
+            core.decodeLumaGainMultiplier = Math.Pow(2,gainSlider_Luma.Value);
+            core.decodeChromaGainMultiplier = Math.Pow(2,gainSlider_Chroma.Value);
+            core.decodeLFLumaGainMultiplier = Math.Pow(2,gainSlider_LFLuma.Value);
             previewDecodeLuma = checkboxPreviewLFLumaDecode.IsChecked == true;
             previewSuperHighQuality = checkboxPreviewUHQ.IsChecked == true;
             previewFrameIndex = (UInt64)frameSlider.Value;

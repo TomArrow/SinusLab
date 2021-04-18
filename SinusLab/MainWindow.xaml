@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SinusLab"
         mc:Ignorable="d"
-        Title="SinusLab" Height="600" Width="1280">
+        Title="SinusLab" Height="600" Width="1280"  FontSize="10">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition></ColumnDefinition>
@@ -139,8 +139,27 @@
                                 <Slider x:Name="gainSlider" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
                                 <TextBox x:Name="gainTextBox" Width="30" Text="{Binding ElementName=gainSlider, Path=Value}"></TextBox>
                             </WrapPanel>
+                            <Label>Luma Gain/Multiply (log 2 scale)</Label>
+                            <WrapPanel>
+                                <Slider x:Name="gainSlider_Luma" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Luma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                <TextBox x:Name="gainTextBox_Luma" Width="30" Text="{Binding ElementName=gainSlider_Luma, Path=Value}"></TextBox>
+                            </WrapPanel>
+                            <Label>Chroma Gain/Multiply (log 2 scale)</Label>
+                            <WrapPanel>
+                                <Slider x:Name="gainSlider_Chroma" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Chroma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                <TextBox x:Name="gainTextBox_Chroma" Width="30" Text="{Binding ElementName=gainSlider_Chroma, Path=Value}"></TextBox>
+                            </WrapPanel>
+                            
                             <GroupBox Header="Only V2">
-                                
+
+                                <StackPanel>
+
+                                    <Label>LF Luma Gain/Multiply (log 2 scale)</Label>
+                                    <WrapPanel>
+                                        <Slider x:Name="gainSlider_LFLuma" Width="130" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_LFLuma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                        <TextBox x:Name="gainTextBox_LFLuma" Width="30" Text="{Binding ElementName=gainSlider_LFLuma, Path=Value}"></TextBox>
+                                    </WrapPanel>
+                                </StackPanel>
                             </GroupBox>
                         </StackPanel>
                     </GroupBox>
