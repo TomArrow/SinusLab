@@ -20,6 +20,8 @@
             </WrapPanel>
             <WrapPanel>
                 <CheckBox x:Name="checkboxPreviewLFLumaDecode" IsChecked="True" Checked="checkboxPreviewLFLumaDecode_Checked" Unchecked="checkboxPreviewLFLumaDecode_Unchecked">LF Luma decode for preview (V2)</CheckBox>
+                <CheckBox x:Name="checkboxPreviewUHQ" IsChecked="False" Checked="checkboxPreviewUHQ_Checked" Unchecked="checkboxPreviewUHQ_Unchecked">Ultra high quality preview</CheckBox>
+                <Button x:Name="btnSavePreviewFrame" Click="btnSavePreviewFrame_Click">Save this preview frame</Button>
             </WrapPanel>
             <Image x:Name="previewImg"></Image>
             
@@ -113,9 +115,10 @@
                                 </GroupBox>
                                 <GroupBox Header="V2">
                                     <StackPanel>
+                                        <Button x:Name="btnLoadVideoIntoPreviewV2" Click="btnLoadVideoIntoPreviewV2_Click">load a video into preview</Button>
                                         <Button x:Name="btnW64ToVideoFastAsyncV2" Click="btnW64ToVideoFastAsyncV2_Click" >fast, multithr.</Button>
                                         <Button x:Name="btnW64ToVideoFastAsyncV2NoLuma" Click="btnW64ToVideoFastAsyncV2NoLuma_Click">fast, multithr. (no rescue luma)</Button>
-                                        <Button x:Name="btnLoadVideoIntoPreviewV2" Click="btnLoadVideoIntoPreviewV2_Click">load into preview</Button>
+                                        <Button x:Name="btnW64ToVideoFastAsyncUHQV2" Click="btnW64ToVideoFastAsyncUHQV2_Click" >fast UHQ hybrid, multithr.</Button>
                                     </StackPanel>
                                 </GroupBox>
                             </StackPanel>

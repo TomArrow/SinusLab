@@ -253,6 +253,10 @@ namespace SinusLab
                 {
                     case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
+                        if (superHighQuality)
+                        {
+                            suffix += "UHQ";
+                        }
                         break;
                     case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
                         suffix = "V2noLum";
@@ -261,10 +265,6 @@ namespace SinusLab
                     default:
                         suffix = "V1";
                         break;
-                }
-                if (superHighQuality)
-                {
-                    suffix += "UHQ";
                 }
 
                 sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+ suffix + ".png";
@@ -286,7 +286,7 @@ namespace SinusLab
                     switch (formatVersion)
                     {
                         case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false, superHighQuality); 
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false, false);  // Super high quality doesn't apply here because no LF luma decoding.
                             break;
                         case SinusLabCore.FormatVersion.V2:
                             output = fast ? core.StereoToRGB24V2Fast(srcDataByte, true, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, true, superHighQuality);
@@ -703,7 +703,7 @@ namespace SinusLab
             }
         }
         
-        private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
+        private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY,bool superHighQuality = false)
         {
             if(videoReferenceFrame == null)
             {
@@ -727,6 +727,10 @@ namespace SinusLab
                 {
                     case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
+                        if (superHighQuality)
+                        {
+                            suffix += "UHQ";
+                        }
                         break;
                     case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
                         suffix = "V2noLum";
@@ -736,6 +740,7 @@ namespace SinusLab
                         suffix = "V1";
                         break;
                 }
+                
 
                 sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+suffix+".mkv";
                 if (sfd.ShowDialog() == true)
@@ -756,10 +761,10 @@ namespace SinusLab
                             switch (formatVersion)
                             {
                                 case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false) : core.StereoToRGB24V2(srcDataByte, false);
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false) : core.StereoToRGB24V2(srcDataByte, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
                                     break;
                                 case SinusLabCore.FormatVersion.V2:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte) : core.StereoToRGB24V2(srcDataByte);
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte,true,superHighQuality) : core.StereoToRGB24V2(srcDataByte, true, superHighQuality);
                                     break;
                                 case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
@@ -990,14 +995,19 @@ namespace SinusLab
 
             core.decodeGainMultiplier = Math.Pow(2,gainSlider.Value);
             previewDecodeLuma = checkboxPreviewLFLumaDecode.IsChecked == true;
+            previewSuperHighQuality = checkboxPreviewUHQ.IsChecked == true;
             previewFrameIndex = (UInt64)frameSlider.Value;
         }
 
         bool previewDecodeLuma = true;
+        bool previewSuperHighQuality = false;
         UInt64 previewFrameIndex = 0;
+        UInt64 previewFrameIndexActuallyDisplayed = 0;
         SuperWAV previewWaveSource = null;
         Task previewDrawingTask = null;
         CancellationTokenSource previewDrawingCancellationTokenSource = null;
+        string previewSourceWavFileName = "";
+        string previewImageSaveSuffix = "";
 
         private async void redrawPreview(bool fast = false, SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY)
         {
@@ -1017,8 +1027,14 @@ namespace SinusLab
             CancellationToken cancellationToken = previewDrawingCancellationTokenSource.Token;
 
             UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
-            float[] srcData = previewWaveSource.getAs32BitFloatFast(imageLength * previewFrameIndex, imageLength * (previewFrameIndex + 1) - 1);
+            UInt64 thisPreviewFrameIndex = previewFrameIndex;
+            float[] srcData = previewWaveSource.getAs32BitFloatFast(imageLength * thisPreviewFrameIndex, imageLength * (thisPreviewFrameIndex + 1) - 1);
 
+
+            bool superHighQuality = previewSuperHighQuality;
+            bool thisPreviewDecodeLuma = previewDecodeLuma;
+
+            string basePreviewImageSaveSuffix = "frame"+ thisPreviewFrameIndex + "_V2" + (thisPreviewDecodeLuma ? "" : "NoLum") + (superHighQuality ? "UHQ" : "");
 
             previewDrawingTask = Task.Run(()=> {
 
@@ -1031,7 +1047,7 @@ namespace SinusLab
                 byte[] output;
 
                 //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
-                output = core.StereoToRGB24V2Fast(srcDataByte,previewDecodeLuma,false,0.5,false,false,8,SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,null,cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, thisPreviewDecodeLuma, superHighQuality, 0.5,false,false,8,SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,null,cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
                 //srcDataByte = null;
@@ -1049,9 +1065,11 @@ namespace SinusLab
                     }
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                 });
+                previewFrameIndexActuallyDisplayed = thisPreviewFrameIndex;
+                previewImageSaveSuffix = basePreviewImageSaveSuffix +"_sub8";
                 cancellationToken.ThrowIfCancellationRequested();
                 /*
-                // Now for he mid quality version:
+                // Now for he mid quality version: (not necessary. going below 8 on the one above doesnt yield much performance gain sadly)
                 output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                 output = null;
@@ -1062,7 +1080,7 @@ namespace SinusLab
                     imgBitmap.Dispose();
                 });*/
                 // Now for he high quality version:
-                output = core.StereoToRGB24V2Fast(srcDataByte, previewDecodeLuma, false, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1077,6 +1095,7 @@ namespace SinusLab
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
                 });
+                previewImageSaveSuffix = basePreviewImageSaveSuffix + "_full";
 
             }, cancellationToken);
 
@@ -1124,6 +1143,8 @@ namespace SinusLab
                 UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
                 frameCount = previewWaveSource.DataLengthInTicks / (imageLength);
 
+                previewSourceWavFileName = ofd.FileName;
+
                 frameSlider.Maximum = frameCount - 1;
                 frameSlider.Value = 0; // This will automatically call RedrawPreview()
 
@@ -1155,6 +1176,42 @@ namespace SinusLab
         {
             updateSettings();
             redrawPreview();
+        }
+
+        private void checkboxPreviewUHQ_Checked(object sender, RoutedEventArgs e)
+        {
+
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void checkboxPreviewUHQ_Unchecked(object sender, RoutedEventArgs e)
+        {
+
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void btnW64ToVideoFastAsyncUHQV2_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(true, SinusLabCore.FormatVersion.V2,true);
+        }
+
+        private void btnSavePreviewFrame_Click(object sender, RoutedEventArgs e)
+        {
+            savePreviewFrame();
+        }
+        private void savePreviewFrame()
+        {
+            using (Bitmap imgToSave = Helpers.ConvertToBitmap((BitmapSource)previewImg.Source))
+            {
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.FileName = previewSourceWavFileName + "_" + previewImageSaveSuffix + ".png";
+                if (sfd.ShowDialog() == true)
+                {
+                    imgToSave.Save(sfd.FileName);
+                }
+            }
         }
     }
 }
