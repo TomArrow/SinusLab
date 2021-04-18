@@ -624,7 +624,7 @@ namespace SinusLab
         }
 
 
-        public byte[] StereoToRGB24V2Fast(byte[] sourceData, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleRateInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null,CancellationToken cancelToken = default)
+        public byte[] StereoToRGB24V2Fast(byte[] sourceData, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null,CancellationToken cancelToken = default)
         {
 
             if (speedReport != null)
@@ -641,7 +641,7 @@ namespace SinusLab
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
 
-            uint fftSamplingDistance = (uint)Math.Floor(fftSampleRateInRelationToWindowSize * (double)windowSize*(double)subsample);
+            uint fftSamplingDistance = (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSize*(double)subsample);
 
             double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*48000);
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
@@ -1119,11 +1119,11 @@ namespace SinusLab
             return output;
         }
         
-        public byte[] StereoToRGB24Fast(byte[] sourceData,double fftSampleRateInRelationToWindowSize = 0.5)
+        public byte[] StereoToRGB24Fast(byte[] sourceData,double fftSampleIntervalInRelationToWindowSize = 0.5)
         {
             double frequencyRange = upperFrequency - lowerFrequency;
 
-            uint fftSamplingDistance=  (uint)Math.Floor(fftSampleRateInRelationToWindowSize * (double)windowSize);
+            uint fftSamplingDistance=  (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSize);
 
             double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
