@@ -101,6 +101,7 @@ namespace SinusLab
         }
 
         public int windowSize = 32;
+        bool windowSizeIsRelativeTo48k = true; // Because at higher sampling rates, we need a higher window size to capture low frequencies...
 
         public enum FormatVersion {
             DEFAULT_LEGACY = 0,
@@ -259,22 +260,22 @@ namespace SinusLab
         }
 
 
-        public byte[] StereoToRGB24(byte[] sourceData)
+        public byte[] StereoToRGB24(byte[] sourceData, double decodingSampleRate)
         {
             double frequencyRange = upperFrequency - lowerFrequency;
 
+            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2,Math.Ceiling(Math.Log((double)windowSize*(double)decodingSampleRate/48000.0,2.0))) : windowSize;
 
-
-            double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
             for (int i = 0; i < decodeL.Length; i++)
             {
                 decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier*BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
-            double[] audioPart = new double[windowSize];
+            double[] audioPart = new double[windowSizeHere];
 
             double[] freqs;
 
@@ -285,7 +286,7 @@ namespace SinusLab
 
 
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
-            freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+            freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
             double tmpMaxIntensity = 0;
             int tmpMaxIntensityIndex = 0;
@@ -298,7 +299,7 @@ namespace SinusLab
             // decode c,h components
             for (int i = 0; i < decodeL.Length; i++)
             {
-                Array.Copy(decode, i, audioPart, 0, windowSize);
+                Array.Copy(decode, i, audioPart, 0, windowSizeHere);
                 double[] window = FftSharp.Window.Hanning(audioPart.Length);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
                 fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
@@ -354,14 +355,16 @@ namespace SinusLab
         }
         
         
-        public byte[] StereoToRGB24V2(byte[] sourceData, bool decodeLFLuma = true,bool superHighQuality = false)
+        public byte[] StereoToRGB24V2(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false)
         {
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
-            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*48000);
+            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
+
+            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2* decodingSampleRate);
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
 
-            double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
@@ -372,16 +375,16 @@ namespace SinusLab
                 {
                     decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
-                Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
+                Array.Copy(decode, windowSizeHere / 2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
                 {
                     decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
             
@@ -396,17 +399,17 @@ namespace SinusLab
             byte[] output = new byte[decodeL.Length * 3];
 
 
-            double[] audioPart = new double[windowSize];
+            double[] audioPart = new double[windowSizeHere];
             double[] freqs;
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
-            freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+            freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
 
             // For LF Luma decode
             double[] audioPartForLFLuma = new double[windowSizeForLFLuma];
             double[] freqsForLFLuma;
             double[] fftMagnitudeForLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
-            freqsForLFLuma = FftSharp.Transform.FFTfreq(samplerate, fftMagnitudeForLFLuma.Length);
+            freqsForLFLuma = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitudeForLFLuma.Length);
 
 
 
@@ -432,7 +435,7 @@ namespace SinusLab
             // decode c,h components and low frequency luma
             for (int i = 0; i < decodeL.Length; i++)
             {
-                Array.Copy(decode, i, audioPart, 0, windowSize);
+                Array.Copy(decode, i, audioPart, 0, windowSizeHere);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
                 fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
 
@@ -514,7 +517,7 @@ namespace SinusLab
 
             // Now we smooth the luma so we can calculate the correct offset.
             double[] smoothedLuma = new double[decodeL.Length];
-            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
+            double encodingFrequencyWavelength = decodingSampleRate / lumaInChromaFrequencyV2;
             int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength*waveLengthSmoothRadiusMultiplierDecodeV2);
             AverageHelper averageHelper = new AverageHelper();
             if (decodeLFLuma)
@@ -624,7 +627,7 @@ namespace SinusLab
         }
 
 
-        public byte[] StereoToRGB24V2Fast(byte[] sourceData, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null,CancellationToken cancelToken = default)
+        public byte[] StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
 
             if (speedReport != null)
@@ -640,13 +643,15 @@ namespace SinusLab
             */
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
 
+            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
 
-            uint fftSamplingDistance = (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSize*(double)subsample);
 
-            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*48000);
+            uint fftSamplingDistance = (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSizeHere * (double)subsample);
+
+            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*decodingSampleRate);
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
 
-            double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
@@ -657,16 +662,16 @@ namespace SinusLab
                 {
                     decodeL[i] = decodeLumaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
-                Array.Copy(decode,windowSize/2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
+                Array.Copy(decode, windowSizeHere / 2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
                 {
                     decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = ( decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
             
@@ -681,17 +686,17 @@ namespace SinusLab
             byte[] output = new byte[decodeL.Length * 3];
 
 
-            double[] audioPart = new double[windowSize];
+            double[] audioPart = new double[windowSizeHere];
             double[] freqs;
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
-            freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+            freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
 
             // For LF Luma decode
             double[] audioPartForLFLuma = new double[windowSizeForLFLuma];
             double[] freqsForLFLuma;
             double[] fftMagnitudeForLFLuma = FftSharp.Transform.FFTmagnitude(audioPartForLFLuma);
-            freqsForLFLuma = FftSharp.Transform.FFTfreq(samplerate, fftMagnitudeForLFLuma.Length);
+            freqsForLFLuma = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitudeForLFLuma.Length);
 
 
 
@@ -776,7 +781,7 @@ namespace SinusLab
                 }
                 if (fftMagnitudeLast == null)
                 {
-                    Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSize);
+                    Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSizeHere);
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeLast = FftSharp.Transform.FFTmagnitude(audioPart);
@@ -789,7 +794,7 @@ namespace SinusLab
                 }
                 if (fftMagnitudeNext == null)
                 {
-                    Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSize);
+                    Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSizeHere);
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeNext = FftSharp.Transform.FFTmagnitude(audioPart);
@@ -930,7 +935,7 @@ namespace SinusLab
 
             // Now we smooth the luma so we can calculate the correct offset.
             double[] smoothedLuma = new double[decodeL.Length];
-            double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
+            double encodingFrequencyWavelength = decodingSampleRate / lumaInChromaFrequencyV2;
             int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength*waveLengthSmoothRadiusMultiplierDecodeV2);
             AverageHelper averageHelper = new AverageHelper();
             if (decodeLFLuma)
@@ -1119,22 +1124,24 @@ namespace SinusLab
             return output;
         }
         
-        public byte[] StereoToRGB24Fast(byte[] sourceData,double fftSampleIntervalInRelationToWindowSize = 0.5)
+        public byte[] StereoToRGB24Fast(byte[] sourceData, double decodingSampleRate, double fftSampleIntervalInRelationToWindowSize = 0.5)
         {
             double frequencyRange = upperFrequency - lowerFrequency;
 
-            uint fftSamplingDistance=  (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSize);
+            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
 
-            double[] decode = new double[sourceData.Length / 8 + windowSize]; // leave windowSize amount of zeros at beginning to avoid if later.
+            uint fftSamplingDistance=  (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSizeHere);
+
+            double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
             for (int i = 0; i < decodeL.Length; i++)
             {
                 decodeL[i] = decodeLumaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decode[i + windowSize / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
-            double[] audioPart = new double[windowSize];
+            double[] audioPart = new double[windowSizeHere];
 
             double[] freqs;
 
@@ -1145,7 +1152,7 @@ namespace SinusLab
 
 
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
-            freqs = FftSharp.Transform.FFTfreq(samplerate, fftMagnitude.Length);
+            freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
             double tmpMaxIntensity = 0;
             int tmpMaxIntensityIndex = 0;
@@ -1177,14 +1184,14 @@ namespace SinusLab
                 }
                 if (fftMagnitudeLast == null)
                 {
-                    Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSize);
+                    Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSizeHere);
                     double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeLast = FftSharp.Transform.FFTmagnitude(audioPart);
                 }
                 if (fftMagnitudeNext == null)
                 {
-                    Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSize);
+                    Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSizeHere);
                     double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeNext = FftSharp.Transform.FFTmagnitude(audioPart);

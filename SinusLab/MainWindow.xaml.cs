@@ -188,7 +188,7 @@ namespace SinusLab
                 if (sfd.ShowDialog() == true)
                 {
                     byte[] sourceData = File.ReadAllBytes(ofd.FileName);
-                    byte[] output = core.StereoToRGB24(sourceData);
+                    byte[] output = core.StereoToRGB24(sourceData,core.samplerate); // For raw we take the value from the user setting.
                     LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, referenceImageHusk);
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                     imgBitmap.Save(sfd.FileName);
@@ -272,8 +272,10 @@ namespace SinusLab
                 {
                     byte[] srcDataByte;
 
+                    uint sampleRate = 48000;
                     using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
                     {
+                        sampleRate = wavFile.getWavInfo().sampleRate;
                         //float[] srcData = wavFile.getEntireFileAs32BitFloat();
                         float[] srcData = wavFile.getAs32BitFloatFast(0,(UInt64)referenceImageHusk.width* (UInt64)referenceImageHusk.height-1);
                         srcDataByte = new byte[srcData.Length * 4];
@@ -286,14 +288,14 @@ namespace SinusLab
                     switch (formatVersion)
                     {
                         case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, false, false);  // Super high quality doesn't apply here because no LF luma decoding.
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, sampleRate, false, false);  // Super high quality doesn't apply here because no LF luma decoding.
                             break;
                         case SinusLabCore.FormatVersion.V2:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, true, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, true, superHighQuality);
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
                             break;
                         case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                         default:
-                            output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                            output = fast ? core.StereoToRGB24Fast(srcDataByte, sampleRate) : core.StereoToRGB24(srcDataByte, sampleRate);
                             break;
                     }
                     mySpeedReport.setPrefix("wavToImage");
@@ -379,7 +381,7 @@ namespace SinusLab
 
                     Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
 
-                    using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, 48000, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length / 2))
+                    using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE, (uint) core.samplerate, 2, SuperWAV.AudioFormat.LPCM, 16, (UInt64)audioDataFloat.Length / 2))
                     {
                         //myWav.writeFloatArray(audioDataFloat);
                         myWav.writeFloatArrayFast(audioDataFloat);
@@ -454,7 +456,7 @@ namespace SinusLab
                         //btnW64ToVideoFastAsync.IsEnabled = false;
                         buttonsAudioToVideo.IsEnabled = false;
 
-                        using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, 48000, 2, SuperWAV.AudioFormat.LPCM, 16))
+                        using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, (uint)core.samplerate, 2, SuperWAV.AudioFormat.LPCM, 16))
                         {
 
 
@@ -671,6 +673,8 @@ namespace SinusLab
 
                             //int currentFrame = 0;
 
+                            uint sampleRate = wavFile.getWavInfo().sampleRate;
+
                             //int frameToWrite = 0;
                             for (UInt64 i = 0; i < frameCount; i++)
                             {
@@ -678,7 +682,7 @@ namespace SinusLab
                                 srcData = wavFile.getAs32BitFloatFast(imageLength*i, imageLength*(i+1)-1); 
                                 srcDataByte = new byte[srcData.Length * 4]; 
                                 Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
-                                output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                                output = fast ? core.StereoToRGB24Fast(srcDataByte, sampleRate) : core.StereoToRGB24(srcDataByte, sampleRate);
                                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                                 imgBitmap = Helpers.ByteArrayToBitmap(image);
                                 writer.WriteVideoFrame(imgBitmap,(uint)i);
@@ -750,6 +754,8 @@ namespace SinusLab
                     bool[] imagesProcessed = new bool[1];
                     bool[] imagesProcessing = new bool[1];
 
+                    uint sampleRate = 48000;
+
                     Func<float[],int,bool, Action> convertWorker = ((float[] audioData,int index,bool fastMode) => {
                         return (Action)(() => {
                             // Actual code:
@@ -761,14 +767,14 @@ namespace SinusLab
                             switch (formatVersion)
                             {
                                 case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, false) : core.StereoToRGB24V2(srcDataByte, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false) : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
                                     break;
                                 case SinusLabCore.FormatVersion.V2:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte,true,superHighQuality) : core.StereoToRGB24V2(srcDataByte, true, superHighQuality);
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
                                     break;
                                 case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
-                                    output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+                                    output = fast ? core.StereoToRGB24Fast(srcDataByte, sampleRate) : core.StereoToRGB24(srcDataByte, sampleRate);
                                     break;
                             }
                             //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
@@ -798,10 +804,12 @@ namespace SinusLab
 #endif
                         using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
                         {
+
+                            sampleRate = wavFile.getWavInfo().sampleRate;
                             //float[] srcData = wavFile.getEntireFileAs32BitFloat();
                             //srcDataByte = new byte[srcData.Length * 4];
                             //Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
-                        
+
                             VideoFileWriter writer = new VideoFileWriter();
                             writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
 
@@ -997,6 +1005,22 @@ namespace SinusLab
             core.decodeLumaGainMultiplier = Math.Pow(2,gainSlider_Luma.Value);
             core.decodeChromaGainMultiplier = Math.Pow(2,gainSlider_Chroma.Value);
             core.decodeLFLumaGainMultiplier = Math.Pow(2,gainSlider_LFLuma.Value);
+            int tmpSampleRate;
+            bool success = int.TryParse(txtEncodeAndRawSampleRate.Text, out tmpSampleRate);
+            if (success)
+            {
+                if(tmpSampleRate > 40000)
+                {
+
+                    core.samplerate = tmpSampleRate;
+                    txtSampleRateError.Text = "";
+                } else
+                {
+                    // No message bc annoying af.
+                    txtSampleRateError.Text = "Cannot set a sample rate below 40 kHz because chroma is encoded to 20kHz and Nyquist said so. If you want to just run it slower, convert to 48k and then reinterpret the output file as something lower, and then reverse it again.";
+                    //MessageBox.Show("Cannot set a sample rate below 40 kHz because chroma is encoded to 20kHz and Nyquist said so. If you want to just run it slower, convert to 48k and then reinterpret the output file as something lower, and then reverse it again.");
+                }
+            }
             previewDecodeLuma = checkboxPreviewLFLumaDecode.IsChecked == true;
             previewSuperHighQuality = checkboxPreviewUHQ.IsChecked == true;
             previewFrameIndex = (UInt64)frameSlider.Value;
@@ -1050,7 +1074,7 @@ namespace SinusLab
                 byte[] output;
 
                 //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
-                output = core.StereoToRGB24V2Fast(srcDataByte, thisPreviewDecodeLuma, superHighQuality, 0.5,false,false,8,SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,null,cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
                 //srcDataByte = null;
@@ -1083,7 +1107,7 @@ namespace SinusLab
                     imgBitmap.Dispose();
                 });*/
                 // Now for he high quality version:
-                output = core.StereoToRGB24V2Fast(srcDataByte, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1215,6 +1239,11 @@ namespace SinusLab
                     imgToSave.Save(sfd.FileName);
                 }
             }
+        }
+
+        private void txtEncodeAndRawSampleRate_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            updateSettings();
         }
     }
 }

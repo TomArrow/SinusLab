@@ -132,6 +132,13 @@
             <TextBlock TextWrapping="Wrap" Padding="10">General note: Audio inputs must be normal LPCM or float .wav, RF64 .wav or .w64. Even though some decode functions say specifically ".wav" or ".w64", any of the 3 formats is accepted.</TextBlock>
             <GroupBox Header="Settings">
                 <StackPanel>
+                    <GroupBox Header="Encode">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap">Sample rate for encoding (and decoding .raw files):</TextBlock>
+                            <TextBox x:Name="txtEncodeAndRawSampleRate" TextChanged="txtEncodeAndRawSampleRate_TextChanged">48000</TextBox>
+                            <TextBlock TextWrapping="Wrap" x:Name="txtSampleRateError" Foreground="Red"></TextBlock>
+                        </StackPanel>
+                    </GroupBox>
                     <GroupBox Header="Decode">
                         <StackPanel>
                             <Label>Gain/Multiply (log 2 scale)</Label>
