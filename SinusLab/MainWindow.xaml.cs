@@ -434,7 +434,7 @@ namespace SinusLab
                     try
                     {
 #endif
-
+                        
                         VideoFileReader reader = new VideoFileReader();
                         reader.Open(ofd.FileName);
 

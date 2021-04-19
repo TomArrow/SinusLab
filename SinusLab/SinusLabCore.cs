@@ -83,8 +83,10 @@ namespace SinusLab
         public double maxAmplitude = Math.Sqrt(2.0) / 2.0;
         public int lowerFrequency = 500;
         public int lowerFrequencyV2 = 3000; // In V2, we encode a low frequency luma offset signal into a 500Hz signal in the chroma so as to compensate for the kind of "centering" happening when converting to the analogue domain or applying many kinds of effects. We sacrifice a bit of hue precision for greater luma precision
+        public int lowerFrequencyV3 = 3000; // Kept same as in V2
         public int upperFrequency = 20000;
         public int upperFrequencyV2 = 20000;
+        public int upperFrequencyV3 = 18000;
         double lumaInChromaFrequencyV2 = 500.0;
         double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
@@ -93,6 +95,13 @@ namespace SinusLab
         public double decodeChromaGainMultiplier = 1.0;
         public double decodeLumaGainMultiplier = 1.0;
         public double decodeLFLumaGainMultiplier = 1.0;
+
+
+        /*
+         * Ideas for V3:
+         * Reduce frequency range for color further, to a max of 18k
+         * Then amplitude-modulate audio into a 23.5 kHz signal, should give at least a response of, what, 11 kHz? Or is that nyquist and its actually just about 5-6? Either would be cool tho!
+         */
 
         public enum LowFrequencyLumaCompensationMode
         {
