@@ -1067,7 +1067,7 @@ namespace SinusLab
                 {
 
                     maxThreads = (uint)tmpMaxCores;
-                    txtSampleRateError.Text = "";
+                    txtMaxThreadsError.Text = "";
                 } else
                 {
                     // No message bc annoying af.
