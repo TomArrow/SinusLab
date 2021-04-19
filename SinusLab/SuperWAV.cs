@@ -46,7 +46,7 @@ namespace SinusLab
         {
             LPCM = 1,
             FLOAT = 3,
-            RF64_FLOAT_OR_CUBASE_BIGFILE = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+            REFERENCE_TO_LATER_SPECIFICATION = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
 
         public struct WavInfo
@@ -778,6 +778,8 @@ namespace SinusLab
                 UInt64 ds64_riffSize = br.ReadUInt64();
                 UInt64 ds64_dataSize = br.ReadUInt64();
 
+                UInt64 fmtChunkLength = 0;
+
                 // find fmt chunk
                 ChunkInfo chunk = new ChunkInfo();
                 UInt64 currentPosition = 12;
@@ -790,6 +792,8 @@ namespace SinusLab
 
                 } while (chunk.name != "FMT ");
 
+                fmtChunkLength = chunk.size;
+
                 br.BaseStream.Seek((Int64)(resultPosition+(UInt64)8), SeekOrigin.Begin);
 
                 // read fmt chunk data, as usual
@@ -800,10 +804,32 @@ namespace SinusLab
                 retVal.bytesPerTick = br.ReadUInt16();
                 retVal.bitsPerSample = br.ReadUInt16();
 
-                if(retVal.audioFormat == AudioFormat.RF64_FLOAT_OR_CUBASE_BIGFILE) // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+                // This is typically a longer chunk that has the required info later.
+                // I'm not 100% confident about this one. It works, but I'm not sure why RF64 and some other stuff doesn't just use the normal value for FLOAT. 
+                if (retVal.audioFormat == AudioFormat.REFERENCE_TO_LATER_SPECIFICATION)
                 {
-                    retVal.audioFormat = AudioFormat.FLOAT;
+                    if(fmtChunkLength > 16)
+                    {
+                        UInt16 restChunkLength = br.ReadUInt16(); // This is a guess!
+                        if (restChunkLength >= 8)
+                        {
+                            _ = br.ReadUInt16(); // This appears to be once again bits per sample.
+                            _ = br.ReadUInt16(); // For a stereo 32 bit float file I get "4" here. Bits per sample but in bytes? But in a .wav file from virtualdub I also encoutnered "3" here! ??
+                            _ = br.ReadUInt16(); // Just zero. Or it could be the higher order bits from the previous number
+                            retVal.audioFormat = (AudioFormat)br.ReadUInt16(); // Here we go.
+
+                        } else
+                        {
+                            throw new Exception("Weird fmt chunk");
+                        }
+                    } else
+                    {
+                        retVal.audioFormat = AudioFormat.FLOAT;
+                    }
+                    //
                 }
+                
+
 
                 // find data chunk
                 currentPosition = 12;

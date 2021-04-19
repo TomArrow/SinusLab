@@ -1,24 +1,14 @@
-﻿using Microsoft.Win32;
+﻿using Accord.Video.FFMPEG;
+using Microsoft.Win32;
 using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Numerics;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using Accord.Video.FFMPEG;
-using System.Threading;
 
 namespace SinusLab
 {
@@ -415,6 +405,22 @@ namespace SinusLab
             if (ofd.ShowDialog() == true)
             {
 
+                SuperWAV audioInput = null;
+                bool hasInputAudio = false;
+
+                if(formatVersion == SinusLabCore.FormatVersion.V3)
+                {
+                    OpenFileDialog ofd2 = new OpenFileDialog();
+                    ofd2.Title = "Select input audio in sync with the input video. Must be .wav, w64 or rf64";
+
+                    if(ofd2.ShowDialog() == true)
+                    {
+                        audioInput = new SuperWAV(ofd2.FileName);
+                        hasInputAudio = true;
+                    }
+                }
+
+
                 SaveFileDialog sfd = new SaveFileDialog();
 
                 string suffix = "";
@@ -469,6 +475,18 @@ namespace SinusLab
                         using (SuperWAV myWav = new SuperWAV(sfd.FileName, SuperWAV.WavFormat.WAVE64, (uint)core.samplerate, 2, SuperWAV.AudioFormat.LPCM, 16))
                         {
 
+                            double audioSamplesPerFrame = 2;
+                            if (hasInputAudio)
+                            {
+                                audioSamplesPerFrame = audioInput.getWavInfo().sampleRate / videoFrameRate.ToDouble() *2; // *2 because half of previous and next frame included.
+                            }
+                            uint audioSamplesPerFrameHalfUInt = (uint)audioSamplesPerFrame/2;
+                            uint audioSamplesToDeliverPerFrameUInt = audioSamplesPerFrameHalfUInt * 4;
+
+                            float[] audioToEncode = new float[audioSamplesToDeliverPerFrameUInt];
+                            float[] audioReadBuffer;
+                            Int64 firstSampleToReadTmp =0, lastSampleToReadTmp=0;
+                            UInt64 firstSampleToRead =0, lastSampleToRead=0,audioOffset=0;
 
                             while (true)
                             {
@@ -489,11 +507,40 @@ namespace SinusLab
                                         buttonsAudioToVideo.IsEnabled = true;
                                     }
 
+                                    if (hasInputAudio) {
+
+                                        firstSampleToReadTmp = (Int64)((double)currentFrame*audioSamplesPerFrame) - audioSamplesPerFrameHalfUInt;
+                                        lastSampleToReadTmp = firstSampleToReadTmp + audioSamplesToDeliverPerFrameUInt-1;
+                                        audioOffset = 0;
+                                        if(firstSampleToRead < 0)
+                                        {
+                                            audioOffset = 0 - firstSampleToRead;
+                                            firstSampleToRead = 0;
+                                        } 
+                                        if (firstSampleToRead > audioInput.DataLengthInTicks-1)
+                                        {
+                                            // Yeah this is over... just do an empty array.
+                                            audioToEncode = new float[audioSamplesToDeliverPerFrameUInt];
+                                        } else
+                                        {
+                                            if (lastSampleToReadTmp < 0)
+                                            {
+                                                throw new Exception("This is impossible!");
+                                            }
+                                            lastSampleToRead = Math.Min((UInt64)lastSampleToReadTmp,audioInput.DataLengthInTicks-1);
+
+                                            audioReadBuffer = audioInput.getAs32BitFloatFast(firstSampleToRead, lastSampleToRead);
+                                            Array.Copy(audioReadBuffer,0,audioToEncode, (int)audioOffset,audioReadBuffer.Length);
+                                        }
+
+
+                                    }
+
                                     byte[] audioData = new byte[1];
                                     switch (formatVersion)
                                     {
                                         case SinusLabCore.FormatVersion.V3:
-                                            audioData = core.RGB24ToStereoV2(frameData.imageData,true);
+                                            audioData = hasInputAudio? core.RGB24ToStereoV2(frameData.imageData, true,audioToEncode): core.RGB24ToStereoV2(frameData.imageData,true);
                                             break;
                                         case SinusLabCore.FormatVersion.V2:
                                             audioData = core.RGB24ToStereoV2(frameData.imageData);
@@ -543,6 +590,12 @@ namespace SinusLab
                         btnW64ToVideoFastAsync.IsEnabled = false;
                     }
 #endif
+                }
+
+
+                if(audioInput != null)
+                {
+                    audioInput.Dispose();
                 }
             }
         }
@@ -887,6 +940,7 @@ namespace SinusLab
                             Int64 lastFrameWrittenIntoVideo = -1;
 
                             Bitmap tmpBitmap;
+
 
                             while (imagesLeft > 0)
                             {

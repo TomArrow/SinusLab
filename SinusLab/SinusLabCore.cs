@@ -198,8 +198,12 @@ namespace SinusLab
             public double multiplier;
         }
 
-        public byte[] RGB24ToStereoV2(byte[] sourceData,bool isV3 = false)
+        // Note: input audio is expected to contain half the audio from the previous and half from the following frame! If not available, provide zeros there. This is required due to possible lowpass filtering/blurring and if ommitted would be likely to cause periodic discontinuities/spikes.
+        public byte[] RGB24ToStereoV2(byte[] sourceData,bool isV3 = false,float[] inputAudioV3 = null)
         {
+
+            int pixelCount = sourceData.Length / 3;
+            double[] preparedAudioData = new double[pixelCount];
 
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
             int lowerFrequencyHere = lowerFrequencyV2;
@@ -207,12 +211,37 @@ namespace SinusLab
             {
                 frequencyRange = upperFrequencyV3 - lowerFrequencyV3;
                 lowerFrequencyHere = lowerFrequencyV3;
+
+                // V3 can be encoded without audio, but what's the point? That was the whole reason for its creation.
+                if(inputAudioV3 != null) {
+                    int audioSampleCount = inputAudioV3.Length / 2; // Divide by 2 because we're getting half of the previous and next frame too.
+                    double audioCarrierPhaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
+
+                    double audioSamplesPerPixel = (double)audioSampleCount / (double)pixelCount;
+                    double audioCarrierPhaseLengthInAudioSamples = audioCarrierPhaseLength*audioSamplesPerPixel;
+
+                    double[] smoothedSamples = boxBlur(inputAudioV3,(uint)(audioCarrierPhaseLengthInAudioSamples*2.0)); // I'm really just guessing here about how much I need to multiply the phase length with for the blur. It's not even a proper low pass filter or anything. But hey, this isn't science, this is games.
+
+                    int readingOffset = audioSampleCount / 2; // Remember, half frame before and half after.
+
+                    // We distinguish 3 cases now: there is more audio samples than pixels or less or equal.
+                    if (audioSampleCount == pixelCount)
+                    {
+                        Array.Copy(smoothedSamples, readingOffset, preparedAudioData, 0, preparedAudioData.Length); // Cool. Nothing much to do here.
+                    } else { 
+                        // Otherwise ... just pick the closest nearby value for now... nearest neighbor. 
+                        for(uint i = 0; i < preparedAudioData.Length; i++)
+                        {
+                            preparedAudioData[i] = smoothedSamples[readingOffset+((int)Math.Round((double)i * audioSamplesPerPixel))];
+                        }
+                    }
+                }
             }
 
             //double distanceRatio = 2*(double)frequencyToGenerate/ (double)samplerate; 
-            double[] output = new double[sourceData.Length / 3];
-            double[] outputL = new double[sourceData.Length / 3];
-            double[] LforSmooth = new double[sourceData.Length / 3];
+            double[] output = new double[pixelCount];
+            double[] outputL = new double[pixelCount];
+            double[] LforSmooth = new double[pixelCount];
 
             double lastPhase = 0;
             double frequencyHere;
@@ -286,13 +315,13 @@ namespace SinusLab
 
             // For V3, encode a 23500 Hz signal into the image for audio
             // Only do this if samplerate bigger than 2x23500 Hz, otherwise Nyquist complains.
-            if (isV3 && samplerate > (audioSubcarrierFrequencyV3*2))
+            if (isV3 && samplerate > (audioSubcarrierFrequencyV3*2) && inputAudioV3 != null)
             {
                 phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
                 phaseAdvancement = 1 / phaseLength;
                 for (int i = 0; i < smoothedLuma.Length; i++)
                 {
-                    output[i] += (maxAmplitude / 2)* Math.Sin(phaseAdvancement * i * Math.PI);
+                    output[i] += (maxAmplitude / 2)* preparedAudioData[i]* Math.Sin(phaseAdvancement * i * Math.PI);
                 }
             }
 
@@ -1336,6 +1365,78 @@ namespace SinusLab
                 output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
             }
 
+            return output;
+        }
+
+        private double[] boxBlur(double[] input, uint radius )
+        {
+            double[] output = new double[input.Length];
+            AverageHelper averageHelper = new AverageHelper();
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= radius; ii++)
+                    {
+                        if ((i + ii) >= input.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += input[i + ii];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                else
+                {
+                    if (i > radius)
+                    {
+                        averageHelper.totalValue -= input[i - radius - 1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if ((i + radius) < input.Length)
+                    {
+                        averageHelper.totalValue += input[i + radius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                output[i] = averageHelper.totalValue / averageHelper.multiplier;
+            }
+            return output;
+        }
+
+        private double[] boxBlur(float[] input, uint radius )
+        {
+            double[] output = new double[input.Length];
+            AverageHelper averageHelper = new AverageHelper();
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= radius; ii++)
+                    {
+                        if ((i + ii) >= input.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += input[i + ii];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                else
+                {
+                    if (i > radius)
+                    {
+                        averageHelper.totalValue -= input[i - radius - 1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if ((i + radius) < input.Length)
+                    {
+                        averageHelper.totalValue += input[i + radius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                output[i] = averageHelper.totalValue / averageHelper.multiplier;
+            }
             return output;
         }
 
