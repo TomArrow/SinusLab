@@ -354,7 +354,7 @@ namespace SinusLab
             return output;
         }
         
-        
+        [Obsolete("Use fast version instead, this one hasn't been updated in a while.")]
         public byte[] StereoToRGB24V2(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false)
         {
             double frequencyRange = upperFrequencyV2 - lowerFrequencyV2;
@@ -626,7 +626,7 @@ namespace SinusLab
             return output;
         }
 
-
+        // set fftSampleIntervalInRelationToWindowSize to 0 or lower to disable fast processing.
         public byte[] StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
 
@@ -645,8 +645,12 @@ namespace SinusLab
 
             int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
 
+            uint fftSamplingDistance = 1;
+            if (fftSampleIntervalInRelationToWindowSize > 0)
+            {
 
-            uint fftSamplingDistance = (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSizeHere * (double)subsample);
+                fftSamplingDistance = (uint)Math.Floor(fftSampleIntervalInRelationToWindowSize * (double)windowSizeHere * (double)subsample);
+            } 
 
             double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*decodingSampleRate);
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
@@ -852,6 +856,7 @@ namespace SinusLab
                 for (int b = 0; b < freqs.Length; b++)
                 {
                     if (freqs[b] < lowerFrequencyV2) continue; // We need to ignore low frequencies in V2 because they will carry the luma offset.
+                    //if (freqs[b] > upperFrequencyV2) continue; // We need to ignore high frequencies in V2 because we might try something crazy?! // Actually nvm it ruins the image anyway...
                     if (fftMagnitude[b] > tmpMaxIntensity)
                     {
                         tmpMaxIntensity = fftMagnitude[b];
