@@ -79,6 +79,12 @@ namespace SinusLab
     class SinusLabCore
     {
 
+        public struct DecodeResult
+        {
+            public byte[] imageData;
+            public float[] audioData;
+        }
+
         public int samplerate = 48000;
         public double maxAmplitude = Math.Sqrt(2.0) / 2.0;
         public int lowerFrequency = 500;
@@ -104,6 +110,7 @@ namespace SinusLab
         public double decodeChromaGainMultiplier = 1.0;
         public double decodeLumaGainMultiplier = 1.0;
         public double decodeLFLumaGainMultiplier = 1.0;
+        public double decodeAudioSubcarrierGainMultiplier = 1.0;
 
 
         public enum WindowFunction
@@ -225,16 +232,16 @@ namespace SinusLab
                     int readingOffset = audioSampleCount / 2; // Remember, half frame before and half after.
 
                     // We distinguish 3 cases now: there is more audio samples than pixels or less or equal.
-                    if (audioSampleCount == pixelCount)
-                    {
-                        Array.Copy(smoothedSamples, readingOffset, preparedAudioData, 0, preparedAudioData.Length); // Cool. Nothing much to do here.
-                    } else { 
+                    //if (audioSampleCount == pixelCount)
+                    //{
+                     //   Array.Copy(smoothedSamples, readingOffset, preparedAudioData, 0, preparedAudioData.Length); // Cool. Nothing much to do here.
+                    //} else { 
                         // Otherwise ... just pick the closest nearby value for now... nearest neighbor. 
                         for(uint i = 0; i < preparedAudioData.Length; i++)
                         {
-                            preparedAudioData[i] = smoothedSamples[readingOffset+((int)Math.Round((double)i * audioSamplesPerPixel))];
+                            preparedAudioData[i] = Math.Min(1.0,Math.Max(0.0,(smoothedSamples[readingOffset+((int)Math.Round((double)i * audioSamplesPerPixel))]/2.0+0.5))); // We're limiting the audio signal to -1 to 1 too.
                         }
-                    }
+                    //}
                 }
             }
 
@@ -709,13 +716,14 @@ namespace SinusLab
         }
 
         // set fftSampleIntervalInRelationToWindowSize to 0 or lower to disable fast processing.
-        public byte[] StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
+        public DecodeResult StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
 
             if (speedReport != null)
             {
                 speedReport.setPrefix("StereoToRGB24V2Fast");
             }
+
 
             /*if (superHighQuality)
             {
@@ -768,22 +776,41 @@ namespace SinusLab
                     decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
-            
 
 
 
-            
+            float[] outputAudio;
+            //if (isV3)
+            //{
+                outputAudio = new float[decodeL.Length]; // Only really relevant for V3 but I prefer to lose the memory and not have to do an IF every time during the big loop, same as with LF Luma
+            //}
+
+
 
             //double[] c = new double[decodeL.Length];
             //double[] h = new double[decodeL.Length];
 
-            byte[] output = new byte[decodeL.Length * 3];
+            byte[] decodedImage = new byte[decodeL.Length * 3];
 
 
             double[] audioPart = new double[windowSizeHere];
             double[] freqs;
             double[] fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
             freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
+
+
+            // Find closest frequency for audio.
+            double smallestDifference = double.PositiveInfinity;
+            int audioCarrierClosestFFTBinIndex = 0;
+            for(int i = 0; i < freqs.Length; i++)
+            {
+                double distanceHere = Math.Abs(freqs[i] - audioSubcarrierFrequencyV3);
+                if (distanceHere < smallestDifference)
+                {
+                    smallestDifference = distanceHere;
+                    audioCarrierClosestFFTBinIndex = i;
+                }
+            }
 
 
             // For LF Luma decode
@@ -997,6 +1024,10 @@ namespace SinusLab
                 decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
                 decodedH[i] = (float)hue;
 
+
+                // Audio
+                outputAudio[i] = (float) ((4.0*decodeAudioSubcarrierGainMultiplier*fftMagnitude[audioCarrierClosestFFTBinIndex])-0.5); // The 4.0* is just a guess for now...
+
                 // Copy pixel to others if we're subsampling
                 // subsample value 1 == no subsampling
                 for(int iii=1; iii < subsample; iii++)
@@ -1004,6 +1035,7 @@ namespace SinusLab
                     decodedLFLuma[i + iii] = decodedLFLuma[i];
                     decodedC[i + iii] = decodedC[i];
                     decodedH[i + iii] = decodedH[i];
+                    outputAudio[i + iii] = outputAudio[i];
                 }
                 /*
                 tmpV.X = (float)(decodeL[i]*lumaFixRatio);
@@ -1153,9 +1185,9 @@ namespace SinusLab
 
                         for (uint ii = 0; ii < subsample; ii++){
 
-                            output[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
-                            output[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
-                            output[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                            decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                            decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                            decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
                         }
                     }
                 } else
@@ -1175,9 +1207,9 @@ namespace SinusLab
                         for (uint ii = 0; ii < subsample; ii++)
                         {
 
-                            output[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
-                            output[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
-                            output[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                            decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                            decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                            decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
                         }
                         //output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                         //output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
@@ -1200,9 +1232,9 @@ namespace SinusLab
                     for (uint ii = 0; ii < subsample; ii++)
                     {
 
-                        output[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
-                        output[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
-                        output[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                        decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                        decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                        decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
                     }
                     //output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                     //output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
@@ -1215,8 +1247,10 @@ namespace SinusLab
                 speedReport.logEvent("Final color conversions.");
             }
 
-
-            return output;
+            DecodeResult decodeResult = new DecodeResult();
+            decodeResult.imageData = decodedImage;
+            decodeResult.audioData = outputAudio;
+            return decodeResult;
         }
         
         public byte[] StereoToRGB24Fast(byte[] sourceData, double decodingSampleRate, double fftSampleIntervalInRelationToWindowSize = 0.5)

@@ -285,10 +285,10 @@ namespace SinusLab
                     switch (formatVersion)
                     {
                         case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false, false, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, sampleRate, false, false);  // Super high quality doesn't apply here because no LF luma decoding.
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false, false, 0.5, speedReport: mySpeedReport).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, false, false);  // Super high quality doesn't apply here because no LF luma decoding.
                             break;
                         case SinusLabCore.FormatVersion.V2:
-                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, 0.5, speedReport: mySpeedReport) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
+                            output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, 0.5, speedReport: mySpeedReport).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
                             break;
                         case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                         default:
@@ -478,13 +478,14 @@ namespace SinusLab
                             double audioSamplesPerFrame = 2;
                             if (hasInputAudio)
                             {
-                                audioSamplesPerFrame = audioInput.getWavInfo().sampleRate / videoFrameRate.ToDouble() *2; // *2 because half of previous and next frame included.
+                                audioSamplesPerFrame = audioInput.getWavInfo().sampleRate / videoFrameRate.ToDouble();
                             }
                             uint audioSamplesPerFrameHalfUInt = (uint)audioSamplesPerFrame/2;
-                            uint audioSamplesToDeliverPerFrameUInt = audioSamplesPerFrameHalfUInt * 4;
+                            uint audioSamplesToDeliverPerFrameUInt = audioSamplesPerFrameHalfUInt * 4; // 4 because half previous and next frame included.
 
                             float[] audioToEncode = new float[audioSamplesToDeliverPerFrameUInt];
                             float[] audioReadBuffer;
+                            float[] audioReadBufferSingleChannel;
                             Int64 firstSampleToReadTmp =0, lastSampleToReadTmp=0;
                             UInt64 firstSampleToRead =0, lastSampleToRead=0,audioOffset=0;
 
@@ -512,15 +513,15 @@ namespace SinusLab
                                         firstSampleToReadTmp = (Int64)((double)currentFrame*audioSamplesPerFrame) - audioSamplesPerFrameHalfUInt;
                                         lastSampleToReadTmp = firstSampleToReadTmp + audioSamplesToDeliverPerFrameUInt-1;
                                         audioOffset = 0;
-                                        if(firstSampleToRead < 0)
+                                        audioToEncode = new float[audioSamplesToDeliverPerFrameUInt];
+                                        if (firstSampleToReadTmp < 0)
                                         {
-                                            audioOffset = 0 - firstSampleToRead;
-                                            firstSampleToRead = 0;
+                                            audioOffset = (UInt64)(0 - firstSampleToReadTmp);
+                                            firstSampleToReadTmp = 0;
                                         } 
-                                        if (firstSampleToRead > audioInput.DataLengthInTicks-1)
+                                        if (firstSampleToReadTmp > (Int64)audioInput.DataLengthInTicks-1)
                                         {
                                             // Yeah this is over... just do an empty array.
-                                            audioToEncode = new float[audioSamplesToDeliverPerFrameUInt];
                                         } else
                                         {
                                             if (lastSampleToReadTmp < 0)
@@ -528,9 +529,32 @@ namespace SinusLab
                                                 throw new Exception("This is impossible!");
                                             }
                                             lastSampleToRead = Math.Min((UInt64)lastSampleToReadTmp,audioInput.DataLengthInTicks-1);
+                                            firstSampleToRead = (UInt64)firstSampleToReadTmp;
 
                                             audioReadBuffer = audioInput.getAs32BitFloatFast(firstSampleToRead, lastSampleToRead);
-                                            Array.Copy(audioReadBuffer,0,audioToEncode, (int)audioOffset,audioReadBuffer.Length);
+
+                                            // Reduce to mono
+                                            int channelCount = audioInput.getWavInfo().channelCount;
+                                            if (channelCount > 0)
+                                            {
+                                                audioReadBufferSingleChannel = new float[audioReadBuffer.Length / audioInput.getWavInfo().channelCount];
+                                                double averageHelper;
+                                                for(int i = 0; i < audioReadBufferSingleChannel.Length; i++)
+                                                {
+                                                    averageHelper = 0;
+                                                    for (int ii = 0; ii < channelCount; ii++)
+                                                    {
+                                                        averageHelper += audioReadBuffer[i * channelCount + ii];
+                                                    }
+                                                    audioReadBufferSingleChannel[i] = (float)(averageHelper / channelCount);
+                                                }
+
+                                                Array.Copy(audioReadBufferSingleChannel, 0, audioToEncode, (int)audioOffset, audioReadBufferSingleChannel.Length);
+                                            } else
+                                            {
+                                                Array.Copy(audioReadBuffer, 0, audioToEncode, (int)audioOffset, audioReadBuffer.Length);
+                                            }
+                                            
                                         }
 
 
@@ -771,10 +795,10 @@ namespace SinusLab
                                 switch (formatVersion)
                                 {
                                     case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                                        output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false) : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
+                                        output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
                                         break;
                                     case SinusLabCore.FormatVersion.V2:
-                                        output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
+                                        output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
                                         break;
                                     case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                     default:
@@ -814,6 +838,8 @@ namespace SinusLab
                 return;
             }
 
+            bool doDecodeAudio = formatVersion == SinusLabCore.FormatVersion.V3;
+
             int threads = maxThreads > 0 ? (int)maxThreads : Environment.ProcessorCount;
             int bufferSize = threads * 2;
             int mainLoopTimeout = 200;
@@ -824,10 +850,18 @@ namespace SinusLab
             if (ofd.ShowDialog() == true)
             {
                 SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Title = "Where to save video?";
 
                 string suffix = "";
                 switch (formatVersion)
                 {
+                    case SinusLabCore.FormatVersion.V3:
+                        suffix = "V3";
+                        if (superHighQuality)
+                        {
+                            suffix += "UHQ";
+                        }
+                        break;
                     case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         if (superHighQuality)
@@ -849,7 +883,21 @@ namespace SinusLab
                 if (sfd.ShowDialog() == true)
                 {
 
+                    string fileNameForOutputAudio = "";
+
+                    if (doDecodeAudio)
+                    {
+                        SaveFileDialog sfd2 = new SaveFileDialog();
+                        sfd2.Title = "Where to save decoded audio?";
+                        sfd2.FileName = sfd.FileName + ".w64";
+                        if(sfd2.ShowDialog() == true)
+                        {
+                            fileNameForOutputAudio = sfd2.FileName;
+                        }
+                    }
+
                     ConcurrentDictionary<int, Bitmap> writeBuffer = new ConcurrentDictionary<int, Bitmap>();
+                    ConcurrentDictionary<int, float[]> writeBufferAudio = new ConcurrentDictionary<int, float[]>();
                     bool[] imagesProcessed = new bool[1];
                     bool[] imagesProcessing = new bool[1];
 
@@ -862,15 +910,21 @@ namespace SinusLab
                             Buffer.BlockCopy(audioData, 0, srcDataByte, 0, srcDataByte.Length);
                             audioData = null;
 
-                            byte[] output;
+                            byte[] output = null;
+                            float[] outputAudio = null;
                             switch (formatVersion)
                             {
+                                case SinusLabCore.FormatVersion.V3:
+                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality,isV3:true) : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
+                                    output = decodeResult.imageData;
+                                    outputAudio = decodeResult.audioData;
+                                    break;
                                 case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false) : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
                                     break;
                                 case SinusLabCore.FormatVersion.V2:
                                     //output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1);
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality).imageData : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1).imageData;
                                     break;
                                 case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
@@ -890,6 +944,14 @@ namespace SinusLab
                                 addingSucceeded = writeBuffer.TryAdd(index, imgBitmap); 
                                 System.Threading.Thread.Sleep(mainLoopTimeout);
                             }
+                            addingSucceeded = false;
+                            if (outputAudio != null) { 
+                                while (!addingSucceeded)
+                                {
+                                    addingSucceeded = writeBufferAudio.TryAdd(index, outputAudio); 
+                                    System.Threading.Thread.Sleep(mainLoopTimeout);
+                                }
+                            }
                             //writeBuffer.Add(index, imgBitmap);
                             imgBitmap = null;
                             imagesProcessing[index] = false;
@@ -904,6 +966,8 @@ namespace SinusLab
 #endif
                         using (SuperWAV wavFile = new SuperWAV(ofd.FileName))
                         {
+
+
 
                             sampleRate = wavFile.getWavInfo().sampleRate;
                             //float[] srcData = wavFile.getEntireFileAs32BitFloat();
@@ -923,6 +987,17 @@ namespace SinusLab
 
                             UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
                             frameCount = wavFile.DataLengthInTicks/(imageLength);
+
+
+                            // If outputting audio, set that up now:
+                            SuperWAV outputAudioFile = null;
+                            uint outputSampleRate = (uint)((double)imageLength*videoFrameRate.ToDouble());
+                            if (doDecodeAudio)
+                            {
+
+                                outputAudioFile = new SuperWAV(fileNameForOutputAudio, SuperWAV.WavFormat.WAVE64, outputSampleRate, 1, SuperWAV.AudioFormat.LPCM, 16, imageLength);
+                            }
+
 
                             //byte[] srcDataByte;
                             //byte[] output;
@@ -978,7 +1053,7 @@ namespace SinusLab
                                 while (framesAvailable && lastFrameWrittenIntoVideo < (Int64)(frameCount-1))
                                 {
                                     UInt64 nextFrameToBeWritten = (UInt64)(lastFrameWrittenIntoVideo + 1);
-                                    if (imagesProcessed[nextFrameToBeWritten] && writeBuffer.ContainsKey((int)nextFrameToBeWritten))
+                                    if (imagesProcessed[nextFrameToBeWritten] && writeBuffer.ContainsKey((int)nextFrameToBeWritten) && (!doDecodeAudio | writeBufferAudio.ContainsKey((int)nextFrameToBeWritten)))
                                     {
                                         bool readingSucceeded = writeBuffer.TryRemove((int)nextFrameToBeWritten,out tmpBitmap); // We're using remove here because that returns a bitmap whether we want to or not anyway...
                                         if (!readingSucceeded)
@@ -986,12 +1061,34 @@ namespace SinusLab
                                             framesAvailable = false;
                                         } else
                                         {
-                                            writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
-                                            tmpBitmap.Dispose();
-                                            tmpBitmap = null;
-                                            lastFrameWrittenIntoVideo++;
-                                            imagesLeft--;
-                                            writer.Flush();
+                                            if (doDecodeAudio)
+                                            {
+                                                float[] audioData;
+                                                readingSucceeded = writeBufferAudio.TryRemove((int)nextFrameToBeWritten, out audioData);
+                                                if (!readingSucceeded)
+                                                {
+                                                    framesAvailable = false;
+                                                } else
+                                                {
+                                                    outputAudioFile.writeFloatArrayFast(audioData, imageLength * nextFrameToBeWritten);
+                                                    audioData = null;
+                                                    writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                                    tmpBitmap.Dispose();
+                                                    tmpBitmap = null;
+                                                    lastFrameWrittenIntoVideo++;
+                                                    imagesLeft--;
+                                                    writer.Flush();
+                                                }
+                                            } else
+                                            {
+
+                                                writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                                tmpBitmap.Dispose();
+                                                tmpBitmap = null;
+                                                lastFrameWrittenIntoVideo++;
+                                                imagesLeft--;
+                                                writer.Flush();
+                                            }
                                         }
 
                                     } else
@@ -1016,6 +1113,11 @@ namespace SinusLab
                                     progress.Report("Saving video: " + i + "/" + frameCount + " frames");
                                 }*/
                             //}*/
+
+                            if (doDecodeAudio)
+                            {
+                                outputAudioFile.Dispose();
+                            }
 
                             writer.Close();
                         }
@@ -1201,7 +1303,7 @@ namespace SinusLab
                 byte[] output;
 
                 //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
-                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,previewFormatVersion == SinusLabCore.FormatVersion.V3,  null,  cancellationToken);
+                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,previewFormatVersion == SinusLabCore.FormatVersion.V3,  null,  cancellationToken).imageData;
 
                 cancellationToken.ThrowIfCancellationRequested();
                 //srcDataByte = null;
@@ -1234,7 +1336,7 @@ namespace SinusLab
                     imgBitmap.Dispose();
                 });*/
                 // Now for he high quality version:
-                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, null,  cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, null,  cancellationToken).imageData;
                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1420,6 +1522,16 @@ namespace SinusLab
         {
 
             loadvideoIntoPreview(SinusLabCore.FormatVersion.V3);
+        }
+
+        private void btnW64ToVideoFastAsyncV3_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(true, SinusLabCore.FormatVersion.V3);
+        }
+
+        private void btnW64ToVideoV3_Click(object sender, RoutedEventArgs e)
+        {
+            w64ToVideoMultiThreadedAsync(false, SinusLabCore.FormatVersion.V3);
         }
     }
 }

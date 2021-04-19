@@ -46,7 +46,7 @@ namespace SinusLab
         {
             LPCM = 1,
             FLOAT = 3,
-            REFERENCE_TO_LATER_SPECIFICATION = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
+            WAVE_FORMAT_EXTENSIBLE = 65534 // I'm not 100% confident about this one. It works, but I'm not sure why RF64 doesn't just use the normal value for FLOAT. Maybe an error that ffmpeg makes?
         }
 
         public struct WavInfo
@@ -680,6 +680,7 @@ namespace SinusLab
             return WavFormat.UNDEFINED_INVALID;
         }
 
+
         private WavInfo readWavInfo()
         {
             checkClosed();
@@ -687,7 +688,8 @@ namespace SinusLab
             WavInfo retVal = new WavInfo();
             if(wavFormat == WavFormat.WAVE)
             {
-                
+
+                UInt64 fmtChunkLength = 0;
 
                 // find fmt chunk
                 ChunkInfo chunk = new ChunkInfo();
@@ -701,6 +703,8 @@ namespace SinusLab
 
                 } while (chunk.name != "FMT ");
 
+                fmtChunkLength = chunk.size;
+
                 br.BaseStream.Seek((Int64)(resultPosition + (UInt64)8), SeekOrigin.Begin);
 
 
@@ -710,6 +714,31 @@ namespace SinusLab
                 retVal.byteRate = br.ReadUInt32();
                 retVal.bytesPerTick = br.ReadUInt16();
                 retVal.bitsPerSample = br.ReadUInt16();
+
+                // WAVE Extensible handling
+                if (retVal.audioFormat == AudioFormat.WAVE_FORMAT_EXTENSIBLE)
+                {
+                    if (fmtChunkLength > 16)
+                    {
+                        UInt16 restChunkLength = br.ReadUInt16(); // This is a guess!
+                        if (restChunkLength >= 8)
+                        {
+                            _ = br.ReadUInt16(); // This appears to be once again bits per sample.
+                            _ = br.ReadUInt32(); // Channel mask. Irrelevant for us.
+                            retVal.audioFormat = (AudioFormat)br.ReadUInt16(); // Here we go.
+                            // The rest of the fmt chunk is a GUID thingie, not interesting.
+
+                        }
+                        else
+                        {
+                            throw new Exception("Weird fmt chunk");
+                        }
+                    }
+                    else
+                    {
+                        throw new Exception("Weird fmt chunk");
+                    }
+                }
 
 
                 // find data chunk
@@ -804,9 +833,8 @@ namespace SinusLab
                 retVal.bytesPerTick = br.ReadUInt16();
                 retVal.bitsPerSample = br.ReadUInt16();
 
-                // This is typically a longer chunk that has the required info later.
-                // I'm not 100% confident about this one. It works, but I'm not sure why RF64 and some other stuff doesn't just use the normal value for FLOAT. 
-                if (retVal.audioFormat == AudioFormat.REFERENCE_TO_LATER_SPECIFICATION)
+                // WAVE Extensible handling
+                if (retVal.audioFormat == AudioFormat.WAVE_FORMAT_EXTENSIBLE)
                 {
                     if(fmtChunkLength > 16)
                     {
@@ -814,9 +842,9 @@ namespace SinusLab
                         if (restChunkLength >= 8)
                         {
                             _ = br.ReadUInt16(); // This appears to be once again bits per sample.
-                            _ = br.ReadUInt16(); // For a stereo 32 bit float file I get "4" here. Bits per sample but in bytes? But in a .wav file from virtualdub I also encoutnered "3" here! ??
-                            _ = br.ReadUInt16(); // Just zero. Or it could be the higher order bits from the previous number
+                            _ = br.ReadUInt32(); // Channel mask. Irrelevant for us.
                             retVal.audioFormat = (AudioFormat)br.ReadUInt16(); // Here we go.
+                            // The rest of the fmt chunk is a GUID thingie, not interesting.
 
                         } else
                         {
@@ -824,9 +852,8 @@ namespace SinusLab
                         }
                     } else
                     {
-                        retVal.audioFormat = AudioFormat.FLOAT;
+                        throw new Exception("Weird fmt chunk");
                     }
-                    //
                 }
                 
 

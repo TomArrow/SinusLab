@@ -112,28 +112,32 @@
                             <Button x:Name="btnLoadReferenceVideo" Click="btnLoadReferenceVideo_Click">Load reference video</Button>
                             <StackPanel IsEnabled="False" x:Name="buttonsAudioToVideo">
 
-                                <GroupBox Header="V1">
-                                    <StackPanel>
-                                        <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" >.w64 to video</Button>
-                                        <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click">.w64 to video (fast)</Button>
-                                        <Button x:Name="btnW64ToVideoFastAsync" Click="btnW64ToVideoFastAsync_Click">.w64 to video (fast,multithread)</Button>
-                                    </StackPanel>
-                                </GroupBox>
-                                <GroupBox Header="V2">
-                                    <StackPanel>
-                                        <Button x:Name="btnLoadVideoIntoPreviewV2" Click="btnLoadVideoIntoPreviewV2_Click">load a video into preview</Button>
-                                        <Button x:Name="btnW64ToVideoV2" Click="btnW64ToVideoV2_Click" >normal/HQ,multithr.</Button>
-                                        <Button x:Name="btnW64ToVideoFastAsyncV2" Click="btnW64ToVideoFastAsyncV2_Click" >fast, multithr.</Button>
-                                        <Button x:Name="btnW64ToVideoFastAsyncV2NoLuma" Click="btnW64ToVideoFastAsyncV2NoLuma_Click">fast, multithr. (no rescue luma)</Button>
-                                        <Button x:Name="btnW64ToVideoAsyncUHQV2" Click="btnW64ToVideoAsyncUHQV2_Click" >normal/HQ UHQ, multithr.</Button>
-                                        <Button x:Name="btnW64ToVideoFastAsyncUHQV2" Click="btnW64ToVideoFastAsyncUHQV2_Click" >fast UHQ hybrid, multithr.</Button>
-                                    </StackPanel>
-                                </GroupBox>
-                                <GroupBox Header="V3">
-                                    <StackPanel>
-                                        <Button x:Name="btnLoadVideoIntoPreviewV3" Click="btnLoadVideoIntoPreviewV3_Click">load a video into preview</Button>
-                                    </StackPanel>
-                                </GroupBox>
+                                <TabControl>
+                                    <TabItem Header="V1">
+                                        <StackPanel>
+                                            <Button x:Name="btnW64ToVideo" Click="btnW64ToVideo_Click" >.w64 to video</Button>
+                                            <Button x:Name="btnW64ToVideoFast" Click="btnW64ToVideoFast_Click">.w64 to video (fast)</Button>
+                                            <Button x:Name="btnW64ToVideoFastAsync" Click="btnW64ToVideoFastAsync_Click">.w64 to video (fast,multithread)</Button>
+                                        </StackPanel>
+                                    </TabItem>
+                                    <TabItem Header="V2">
+                                        <StackPanel>
+                                            <Button x:Name="btnLoadVideoIntoPreviewV2" Click="btnLoadVideoIntoPreviewV2_Click">load a video into preview</Button>
+                                            <Button x:Name="btnW64ToVideoV2" Click="btnW64ToVideoV2_Click" >normal/HQ,multithr.</Button>
+                                            <Button x:Name="btnW64ToVideoFastAsyncV2" Click="btnW64ToVideoFastAsyncV2_Click" >fast, multithr.</Button>
+                                            <Button x:Name="btnW64ToVideoFastAsyncV2NoLuma" Click="btnW64ToVideoFastAsyncV2NoLuma_Click">fast, multithr. (no rescue luma)</Button>
+                                            <Button x:Name="btnW64ToVideoAsyncUHQV2" Click="btnW64ToVideoAsyncUHQV2_Click" >normal/HQ UHQ, multithr.</Button>
+                                            <Button x:Name="btnW64ToVideoFastAsyncUHQV2" Click="btnW64ToVideoFastAsyncUHQV2_Click" >fast UHQ hybrid, multithr.</Button>
+                                        </StackPanel>
+                                    </TabItem>
+                                    <TabItem Header="V3">
+                                        <StackPanel>
+                                            <Button x:Name="btnLoadVideoIntoPreviewV3" Click="btnLoadVideoIntoPreviewV3_Click">load a video into preview</Button>
+                                            <Button x:Name="btnW64ToVideoFastAsyncV3" Click="btnW64ToVideoFastAsyncV3_Click" >fast, multithr.</Button>
+                                            <Button x:Name="btnW64ToVideoV3" Click="btnW64ToVideoV3_Click" >normal/HQ,multithr.</Button>
+                                        </StackPanel>
+                                    </TabItem>
+                                </TabControl>
                             </StackPanel>
                         </StackPanel>
                     </GroupBox>

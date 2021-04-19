@@ -436,6 +436,13 @@ namespace SinusLab
             public float divisor;
         };
 
+
+        public struct AverageHelper
+        {
+            public double totalValue;
+            public double multiplier;
+        }
+
         static public Vector3 WhiteReference = new Vector3
         {
             X = 95.047f,
