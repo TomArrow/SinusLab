@@ -100,6 +100,11 @@
                                     <Button x:Name="btnVideoToW64V2" Click="btnVideoToW64V2_Click">Video to .w64 audio</Button>
                                 </StackPanel>
                             </GroupBox>
+                            <GroupBox Header="V3 (work in progress)">
+                                <StackPanel>
+                                    <Button x:Name="btnVideoToW64V3" Click="btnVideoToW64V3_Click">Video to .w64 audio</Button>
+                                </StackPanel>
+                            </GroupBox>
                         </StackPanel>
                     </GroupBox>
                     <GroupBox Header="Audio to video" Grid.Column="1">
@@ -122,6 +127,11 @@
                                         <Button x:Name="btnW64ToVideoFastAsyncV2NoLuma" Click="btnW64ToVideoFastAsyncV2NoLuma_Click">fast, multithr. (no rescue luma)</Button>
                                         <Button x:Name="btnW64ToVideoAsyncUHQV2" Click="btnW64ToVideoAsyncUHQV2_Click" >normal/HQ UHQ, multithr.</Button>
                                         <Button x:Name="btnW64ToVideoFastAsyncUHQV2" Click="btnW64ToVideoFastAsyncUHQV2_Click" >fast UHQ hybrid, multithr.</Button>
+                                    </StackPanel>
+                                </GroupBox>
+                                <GroupBox Header="V3">
+                                    <StackPanel>
+                                        <Button x:Name="btnLoadVideoIntoPreviewV3" Click="btnLoadVideoIntoPreviewV3_Click">load a video into preview</Button>
                                     </StackPanel>
                                 </GroupBox>
                             </StackPanel>
@@ -151,7 +161,25 @@
                                 <TextBlock TextWrapping="Wrap" x:Name="txtMaxThreadsError" Foreground="Red"></TextBlock>
                                 <TextBlock TextWrapping="Wrap">(advice: increase thread count only for very small resolutions)</TextBlock>
                             </WrapPanel>
-                            
+
+
+                            <Label>FFT window function</Label>
+                            <ComboBox x:Name="cmbFFTWindowFunction" SelectionChanged="cmbFFTWindowFunction_SelectionChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"></TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                                <!--<ComboBoxItem>Rectangular</ComboBoxItem>
+                                <ComboBoxItem IsSelected="True">Hanning</ComboBoxItem>
+                                <ComboBoxItem>Hamming</ComboBoxItem>
+                                <ComboBoxItem>Blackman</ComboBoxItem>
+                                <ComboBoxItem>BlackmanExact</ComboBoxItem>
+                                <ComboBoxItem>BlackmanHarris</ComboBoxItem>
+                                <ComboBoxItem>FlatTop</ComboBoxItem>
+                                <ComboBoxItem>Bartlett</ComboBoxItem>
+                                <ComboBoxItem>Cosine</ComboBoxItem>-->
+                            </ComboBox>
                             <Label>Gain/Multiply (log 2 scale)</Label>
                             <WrapPanel>
                                 <Slider x:Name="gainSlider" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>

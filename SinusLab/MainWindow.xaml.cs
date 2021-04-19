@@ -49,6 +49,9 @@ namespace SinusLab
             maxThreads = (uint)Environment.ProcessorCount;
             txtMaxThreads.Text = Environment.ProcessorCount.ToString();
             lblMaxThreads.Content = "("+ Environment.ProcessorCount.ToString() + " cores)";
+
+            cmbFFTWindowFunction.ItemsSource = System.Enum.GetValues(typeof(SinusLabCore.WindowFunction));
+            cmbFFTWindowFunction.SelectedItem = core.windowFunction;
         }
 
         ~MainWindow()
@@ -417,6 +420,9 @@ namespace SinusLab
                 string suffix = "";
                 switch (formatVersion)
                 {
+                    case SinusLabCore.FormatVersion.V3:
+                        suffix = "V3";
+                        break;
                     case SinusLabCore.FormatVersion.V2:
                         suffix = "V2";
                         break;
@@ -486,6 +492,9 @@ namespace SinusLab
                                     byte[] audioData = new byte[1];
                                     switch (formatVersion)
                                     {
+                                        case SinusLabCore.FormatVersion.V3:
+                                            audioData = core.RGB24ToStereoV2(frameData.imageData,true);
+                                            break;
                                         case SinusLabCore.FormatVersion.V2:
                                             audioData = core.RGB24ToStereoV2(frameData.imageData);
                                             break;
@@ -808,7 +817,7 @@ namespace SinusLab
                                     break;
                                 case SinusLabCore.FormatVersion.V2:
                                     //output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality,-1);
+                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1);
                                     break;
                                 case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
@@ -1043,15 +1052,22 @@ namespace SinusLab
             core.decodeLumaGainMultiplier = Math.Pow(2,gainSlider_Luma.Value);
             core.decodeChromaGainMultiplier = Math.Pow(2,gainSlider_Chroma.Value);
             core.decodeLFLumaGainMultiplier = Math.Pow(2,gainSlider_LFLuma.Value);
+            core.windowFunction = (SinusLabCore.WindowFunction)cmbFFTWindowFunction.SelectedItem;
             int tmpSampleRate;
             bool success = int.TryParse(txtEncodeAndRawSampleRate.Text, out tmpSampleRate);
             if (success)
             {
                 if(tmpSampleRate > 40000)
                 {
+                    if(tmpSampleRate <= (2 * core.AudioSubcarrierFrequencyV3))
+                    {
+                        txtSampleRateError.Text = "A sample rate of "+tmpSampleRate+" is not high enough to allow for an audio carrier in V3 encoding, if you care about that. Pick something over "+(core.AudioSubcarrierFrequencyV3 * 2);
+                    } else
+                    {
 
+                        txtSampleRateError.Text = "";
+                    }
                     core.samplerate = tmpSampleRate;
-                    txtSampleRateError.Text = "";
                 } else
                 {
                     // No message bc annoying af.
@@ -1084,6 +1100,7 @@ namespace SinusLab
         bool previewDecodeLuma = true;
         bool previewDecodeFast = true;
         bool previewSuperHighQuality = false;
+        SinusLabCore.FormatVersion previewFormatVersion = SinusLabCore.FormatVersion.V2;
         UInt64 previewFrameIndex = 0;
         UInt64 previewFrameIndexActuallyDisplayed = 0;
         SuperWAV previewWaveSource = null;
@@ -1130,7 +1147,7 @@ namespace SinusLab
                 byte[] output;
 
                 //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
-                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken) ;
+                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,previewFormatVersion == SinusLabCore.FormatVersion.V3,  null,  cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
                 //srcDataByte = null;
@@ -1163,7 +1180,7 @@ namespace SinusLab
                     imgBitmap.Dispose();
                 });*/
                 // Now for he high quality version:
-                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, null, cancellationToken);
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, null,  cancellationToken);
                 image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1195,7 +1212,7 @@ namespace SinusLab
             loadvideoIntoPreview();
         }
 
-        private void loadvideoIntoPreview()
+        private void loadvideoIntoPreview(SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.V2)
         {
             if (videoReferenceFrame == null)
             {
@@ -1221,7 +1238,8 @@ namespace SinusLab
                 {
 #endif
                 previewWaveSource = new SuperWAV(ofd.FileName);
-                
+
+                previewFormatVersion = formatVersion;
 
                 UInt64 imageLength = (UInt64)videoReferenceFrame.width * (UInt64)videoReferenceFrame.height;
                 frameCount = previewWaveSource.DataLengthInTicks / (imageLength);
@@ -1330,6 +1348,24 @@ namespace SinusLab
         private void btnW64ToVideoAsyncUHQV2_Click(object sender, RoutedEventArgs e)
         {
             w64ToVideoMultiThreadedAsync(false, SinusLabCore.FormatVersion.V2,true);
+        }
+
+        private void cmbFFTWindowFunction_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void btnVideoToW64V3_Click(object sender, RoutedEventArgs e)
+        {
+
+            videoToW64(SinusLabCore.FormatVersion.V3);
+        }
+
+        private void btnLoadVideoIntoPreviewV3_Click(object sender, RoutedEventArgs e)
+        {
+
+            loadvideoIntoPreview(SinusLabCore.FormatVersion.V3);
         }
     }
 }
