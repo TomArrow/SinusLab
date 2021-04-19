@@ -96,7 +96,7 @@ namespace SinusLab
         double lumaInChromaFrequencyV2 = 500.0;
         double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
-        double audioSubcarrierFrequencyV3 = 23500.0;
+        double audioSubcarrierFrequencyV3 = 22000.0; // formerly 23500 - created modulation problems at 48khz
 
         public double AudioSubcarrierFrequencyV3
         {
@@ -326,7 +326,7 @@ namespace SinusLab
             {
                 phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
                 phaseAdvancement = 1 / phaseLength;
-                for (int i = 0; i < smoothedLuma.Length; i++)
+                for (int i = 0; i < preparedAudioData.Length; i++)
                 {
                     output[i] += (maxAmplitude / 2)* preparedAudioData[i]* Math.Sin(phaseAdvancement * i * Math.PI);
                 }
@@ -811,6 +811,10 @@ namespace SinusLab
                     audioCarrierClosestFFTBinIndex = i;
                 }
             }
+            if(audioCarrierClosestFFTBinIndex == freqs.Length - 1)
+            {
+                audioCarrierClosestFFTBinIndex--; // There's some issue with the highest bin, dunno why. It regularly just goes to zero for no apparent reason. Maybe a bug.
+            }
 
 
             // For LF Luma decode
@@ -831,6 +835,7 @@ namespace SinusLab
 
             //Vector3[] outputBuffer = new Vector3[decodeL.Length];
             //double decodedLFLuma;
+
 
             double[] decodedLFLuma = new double[decodeL.Length];
             double[] decodedC = new double[decodeL.Length];
