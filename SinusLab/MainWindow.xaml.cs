@@ -968,6 +968,7 @@ namespace SinusLab
                                 {
                                     outputAudioResampled[i] = outputAudio[Math.Min(outputAudio.Length-1,(int)Math.Round((double)i*sampleRateRatio))];
                                 }
+                                outputAudio = null;
                             } else
                             {
                                 outputAudioResampled = outputAudio;
@@ -987,10 +988,10 @@ namespace SinusLab
                                 System.Threading.Thread.Sleep(mainLoopTimeout);
                             }
                             addingSucceeded = false;
-                            if (outputAudio != null) { 
+                            if (outputAudioResampled != null) { 
                                 while (!addingSucceeded)
                                 {
-                                    addingSucceeded = writeBufferAudio.TryAdd(index, outputAudio); 
+                                    addingSucceeded = writeBufferAudio.TryAdd(index, outputAudioResampled); 
                                     System.Threading.Thread.Sleep(mainLoopTimeout);
                                 }
                             }
@@ -1039,7 +1040,7 @@ namespace SinusLab
                             if (doDecodeAudio)
                             {
 
-                                outputAudioFile = new SuperWAV(fileNameForOutputAudio, SuperWAV.WavFormat.WAVE64, outputSampleRate, 1, SuperWAV.AudioFormat.LPCM, 16, imageLength);
+                                outputAudioFile = new SuperWAV(fileNameForOutputAudio, SuperWAV.WavFormat.WAVE64, outputSampleRate, 1, SuperWAV.AudioFormat.LPCM, 16, (UInt64)Math.Ceiling(outputSamplesPerVideoFrame));
                             }
 
 
