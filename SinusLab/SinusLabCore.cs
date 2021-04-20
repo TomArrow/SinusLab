@@ -1496,7 +1496,7 @@ namespace SinusLab
             return output;
         }
 
-        private double[] boxBlur(double[] input, uint radius )
+        public double[] boxBlur(double[] input, uint radius )
         {
             double[] output = new double[input.Length];
             AverageHelper averageHelper = new AverageHelper();
@@ -1531,8 +1531,43 @@ namespace SinusLab
             }
             return output;
         }
+        public float[] boxBlurFloat(float[] input, uint radius )
+        {
+            float[] output = new float[input.Length];
+            AverageHelper averageHelper = new AverageHelper();
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (i == 0)
+                {
+                    for (int ii = 0; ii <= radius; ii++)
+                    {
+                        if ((i + ii) >= input.Length)
+                        {
+                            break;
+                        }
+                        averageHelper.totalValue += input[i + ii];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                else
+                {
+                    if (i > radius)
+                    {
+                        averageHelper.totalValue -= input[i - radius - 1];
+                        averageHelper.multiplier -= 1;
+                    }
+                    if ((i + radius) < input.Length)
+                    {
+                        averageHelper.totalValue += input[i + radius];
+                        averageHelper.multiplier += 1;
+                    }
+                }
+                output[i] = (float)(averageHelper.totalValue / averageHelper.multiplier);
+            }
+            return output;
+        }
 
-        private double[] boxBlur(float[] input, uint radius )
+        public double[] boxBlur(float[] input, uint radius )
         {
             double[] output = new double[input.Length];
             AverageHelper averageHelper = new AverageHelper();

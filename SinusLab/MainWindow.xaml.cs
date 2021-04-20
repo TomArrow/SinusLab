@@ -22,6 +22,8 @@ namespace SinusLab
 
         uint maxThreads = 4;
 
+        uint maxDecodeSampleRate = 96000;
+
         private bool isInitialized = false;
         public MainWindow()
         {
@@ -911,7 +913,10 @@ namespace SinusLab
                     bool[] imagesProcessed = new bool[1];
                     bool[] imagesProcessing = new bool[1];
 
+                    // These are all just placeholder values. They are filled down there with meaningful values
                     uint sampleRate = 48000;
+                    uint outputNativeSampleRate = 48000; // Actual sample rate you would get if decoding one audio sample per source audio sample/pixel. This can go into the Megahertz area, at which point the output wave files become kinda useless...
+                    uint outputSampleRate = 48000; // This is the actual sample rate we'll be saving as. We'll resample from the native one to this.
 
                     Func<float[],int,bool, Action> convertWorker = ((float[] audioData,int index,bool fastMode) => {
                         return (Action)(() => {
@@ -942,6 +947,33 @@ namespace SinusLab
                                     break;
                             }
                             //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
+
+                            float[] outputAudioResampled = null;
+
+                            // Resample audio if outputSampleRate is different from native one
+                            if(outputSampleRate != outputNativeSampleRate)
+                            {
+                                double sampleRateRatio = (double)outputNativeSampleRate / (double)outputSampleRate;
+                                outputAudioResampled = new float[(int)Math.Ceiling((double)outputAudio.Length * outputSampleRate / outputNativeSampleRate)];
+
+
+                                if (outputSampleRate < outputNativeSampleRate)
+                                {
+
+                                    uint blurRadius = (uint)Math.Ceiling((double)outputNativeSampleRate / (double)outputSampleRate / 2); //Divided by 2 because radius. 
+                                    outputAudio = core.boxBlurFloat(outputAudio, blurRadius); // TODO find out if we need a bigger blur radius perhaps.
+                                    
+                                }
+                                for (int i = 0; i < outputAudioResampled.Length; i++) // Nearest neighbor on the smoothed stuff.
+                                {
+                                    outputAudioResampled[i] = outputAudio[Math.Min(outputAudio.Length-1,(int)Math.Round((double)i*sampleRateRatio))];
+                                }
+                            } else
+                            {
+                                outputAudioResampled = outputAudio;
+                                outputAudio = null;
+                            }
+
 
 
                             srcDataByte = null;
@@ -1001,7 +1033,9 @@ namespace SinusLab
 
                             // If outputting audio, set that up now:
                             SuperWAV outputAudioFile = null;
-                            uint outputSampleRate = (uint)((double)imageLength*videoFrameRate.ToDouble());
+                            outputNativeSampleRate = (uint)((double)imageLength*videoFrameRate.ToDouble());
+                            outputSampleRate = Math.Min(maxDecodeSampleRate,outputNativeSampleRate);
+                            double outputSamplesPerVideoFrame = (double)outputSampleRate / videoFrameRate.ToDouble();
                             if (doDecodeAudio)
                             {
 
@@ -1098,7 +1132,7 @@ namespace SinusLab
                                                     framesAvailable = false;
                                                 } else
                                                 {
-                                                    outputAudioFile.writeFloatArrayFast(audioData, imageLength * nextFrameToBeWritten);
+                                                    outputAudioFile.writeFloatArrayFast(audioData, (UInt64)(outputSamplesPerVideoFrame * (double)nextFrameToBeWritten));
                                                     audioData = null;
                                                     writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
                                                     tmpBitmap.Dispose();
