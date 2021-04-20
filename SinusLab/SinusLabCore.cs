@@ -1105,7 +1105,7 @@ namespace SinusLab
 
 
                 // Audio
-                outputAudio[i] = ((7.0*decodeAudioSubcarrierGainMultiplier*fftMagnitude[audioCarrierClosestFFTBinIndex])-0.5); // The 4.0* is just a guess for now...
+                outputAudio[i] = ((6.0*decodeAudioSubcarrierGainMultiplier*fftMagnitude[audioCarrierClosestFFTBinIndex])-0.5); // The 4.0* is just a guess for now...
 
                 // Copy pixel to others if we're subsampling
                 // subsample value 1 == no subsampling
