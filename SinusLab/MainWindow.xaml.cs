@@ -1436,7 +1436,7 @@ namespace SinusLab
                 });
                 mySpeedReport.logEvent("Full quality preview drawn.");
                 previewImageSaveSuffix = basePreviewImageSaveSuffix + "_full";
-                Dispatcher.Invoke(()=> { MessageBox.Show(mySpeedReport.getFormattedList()); });
+                //Dispatcher.Invoke(()=> { MessageBox.Show(mySpeedReport.getFormattedList()); });
                 mySpeedReport.Stop();
 
             }, cancellationToken);
