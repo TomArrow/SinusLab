@@ -205,8 +205,15 @@ namespace SinusLab
             public double multiplier;
         }
 
+        // Old-school signature if u dont care about audio continuity.
+        public byte[] RGB24ToStereoV2(byte[] sourceData, bool isV3 = false, float[] inputAudioV3 = null)
+        {
+            double phaseOffset = 0;
+            return RGB24ToStereoV2(sourceData, ref phaseOffset, isV3, inputAudioV3);
+        }
+
         // Note: input audio is expected to contain half the audio from the previous and half from the following frame! If not available, provide zeros there. This is required due to possible lowpass filtering/blurring and if ommitted would be likely to cause periodic discontinuities/spikes.
-        public byte[] RGB24ToStereoV2(byte[] sourceData,bool isV3 = false,float[] inputAudioV3 = null)
+        public byte[] RGB24ToStereoV2(byte[] sourceData, ref double audioEncodingPhaseOffset, bool isV3 = false,float[] inputAudioV3 = null)
         {
 
             int pixelCount = sourceData.Length / 3;
@@ -271,7 +278,7 @@ namespace SinusLab
                 phaseLengthHere = ((double)samplerate) / frequencyHere / 2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
-                output[i] = (double)tmpV.Y / 100.0 * (maxAmplitude/2) * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
+                //output[i] = (double)tmpV.Y / 100.0 * (maxAmplitude/2) * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
                 outputL[i] = ((double)tmpV.X - 50) * 2 / 100.0 * maxAmplitude; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
                 LforSmooth[i] = (double)tmpV.X/ 100.0; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
                 lastPhase = phaseHere % 2;
@@ -317,7 +324,7 @@ namespace SinusLab
             double phaseAdvancement = 1 / phaseLength;
             for (int i = 0; i < smoothedLuma.Length; i++)
             {
-                output[i] += (maxAmplitude/2)*smoothedLuma[i] * Math.Sin(phaseAdvancement*i * Math.PI);
+                //output[i] += (maxAmplitude/2)*smoothedLuma[i] * Math.Sin(phaseAdvancement*i * Math.PI);
             }
 
             // For V3, encode a 23500 Hz signal into the image for audio
@@ -328,8 +335,10 @@ namespace SinusLab
                 phaseAdvancement = 1 / phaseLength;
                 for (int i = 0; i < preparedAudioData.Length; i++)
                 {
-                    output[i] += (maxAmplitude / 2)* preparedAudioData[i]* Math.Sin(phaseAdvancement * i * Math.PI);
+                    output[i] += (maxAmplitude / 2)* preparedAudioData[i]* Math.Sin((audioEncodingPhaseOffset+ (double)phaseAdvancement * (double)i) * Math.PI);
                 }
+                audioEncodingPhaseOffset += (double)(preparedAudioData.Length)*phaseAdvancement;
+                audioEncodingPhaseOffset %= 2;
             }
 
             byte[] outputBytes = new byte[output.Length * 4 * 2];

@@ -489,8 +489,11 @@ namespace SinusLab
                             Int64 firstSampleToReadTmp =0, lastSampleToReadTmp=0;
                             UInt64 firstSampleToRead =0, lastSampleToRead=0,audioOffset=0;
 
+                            double phaseOffset = 0;
+
                             while (true)
                             {
+
                                 using (Bitmap videoFrame = reader.ReadVideoFrame())
                                 {
                                     if (videoFrame == null)
@@ -560,11 +563,17 @@ namespace SinusLab
 
                                     }
 
+                                    // Experiment: just fill it all with 0.5
+                                    /*for(int a = 0; a < audioToEncode.Length; a++)
+                                    {
+                                    audioToEncode[a] = 0.5f;
+                                    }*/
+
                                     byte[] audioData = new byte[1];
                                     switch (formatVersion)
                                     {
                                         case SinusLabCore.FormatVersion.V3:
-                                            audioData = hasInputAudio? core.RGB24ToStereoV2(frameData.imageData, true,audioToEncode): core.RGB24ToStereoV2(frameData.imageData,true);
+                                            audioData = hasInputAudio? core.RGB24ToStereoV2(frameData.imageData, ref phaseOffset, true,audioToEncode): core.RGB24ToStereoV2(frameData.imageData,ref phaseOffset,true);
                                             break;
                                         case SinusLabCore.FormatVersion.V2:
                                             audioData = core.RGB24ToStereoV2(frameData.imageData);
@@ -580,6 +589,7 @@ namespace SinusLab
                                     Buffer.BlockCopy(audioData, 0, audioDataFloat, 0, audioData.Length);
                                     //myWav.writeFloatArray(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
                                     myWav.writeFloatArrayFast(audioDataFloat, currentFrame*(UInt64)audioDataFloat.Length/2);
+
 
                                     /*if (currentFrame % 1000 == 0)
                                     {

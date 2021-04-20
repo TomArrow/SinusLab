@@ -130,7 +130,7 @@
                                             <Button x:Name="btnW64ToVideoFastAsyncUHQV2" Click="btnW64ToVideoFastAsyncUHQV2_Click" >fast UHQ hybrid, multithr.</Button>
                                         </StackPanel>
                                     </TabItem>
-                                    <TabItem Header="V3">
+                                    <TabItem Header="V3" IsSelected="True">
                                         <StackPanel>
                                             <Button x:Name="btnLoadVideoIntoPreviewV3" Click="btnLoadVideoIntoPreviewV3_Click">load a video into preview</Button>
                                             <Button x:Name="btnW64ToVideoFastAsyncV3" Click="btnW64ToVideoFastAsyncV3_Click" >fast, multithr.</Button>
