@@ -925,7 +925,7 @@ namespace SinusLab
                             switch (formatVersion) // some functions calll core.removeHandles<byte>(srcDataByte), because the data we get here has handles from previous and later frames (half of each) for better fft continuity, and some of the older functions dont accept that.
                             {
                                 case SinusLabCore.FormatVersion.V3:
-                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality,isV3:true) : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
+                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, isV3: true) : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
                                     output = decodeResult.imageData;
                                     outputAudio = decodeResult.audioData;
                                     break;

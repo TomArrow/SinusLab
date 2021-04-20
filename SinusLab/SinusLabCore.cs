@@ -744,12 +744,12 @@ namespace SinusLab
             Array.Copy(sourceData,0,sourceDataWithHandles,handleLength*8,sourceData.Length);
             sourceData = null;
 
-            return StereoToRGB24V2FastWithHandles(sourceDataWithHandles, decodingSampleRate,decodeLFLuma,superHighQuality,fftSampleIntervalInRelationToWindowSize,normalizeLFLuma,normalizeSaturation,subsample,compensationMode,isV3,speedReport,cancelToken);
+            return StereoToRGB24V2FastWithHandles(sourceDataWithHandles, decodingSampleRate, decodeLFLuma, superHighQuality, fftSampleIntervalInRelationToWindowSize, normalizeLFLuma, normalizeSaturation, subsample, compensationMode, isV3, speedReport: speedReport, cancelToken: cancelToken);
         }
 
         // This version of the function needs the sourceData to have half the previous frame and half the next frame as a handle to improve fft continuity and as such the data itself should be divisible by 2 or unexpected errors might occur. Especially important for audio subcarrier decoding. Call the other function if you don't care about that, it will add the handles automatically (zeros, obviously).
         // set fftSampleIntervalInRelationToWindowSize to 0 or lower to disable fast processing.
-        public DecodeResult StereoToRGB24V2FastWithHandles(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
+        public DecodeResult StereoToRGB24V2FastWithHandles(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, bool tryRemoveAudioDecodeInterferenceFromFFTV3 = true, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
 
             if (speedReport != null)
@@ -846,10 +846,17 @@ namespace SinusLab
 
 
 
-            float[] outputAudio;
+            double[] outputAudio;
             //if (isV3)
             //{
-                outputAudio = new float[decodeL.Length]; // Only really relevant for V3 but I prefer to lose the memory and not have to do an IF every time during the big loop, same as with LF Luma
+            if (tryRemoveAudioDecodeInterferenceFromFFTV3)// Only really relevant for V3 but I prefer to lose the memory and not have to do an IF every time during the big loop, same as with LF Luma
+            {
+                outputAudio = new double[(int)Math.Pow(2, Math.Ceiling(Math.Log((double)decodeL.Length, 2.0)))];  // Trying to remove the offending frequency (4 khz at 22khz carrier freq at 48 khz samplerate) will require a array divisible by 2
+            } else
+            {
+
+                outputAudio = new double[decodeL.Length]; 
+            }
             //}
 
 
@@ -1098,7 +1105,7 @@ namespace SinusLab
 
 
                 // Audio
-                outputAudio[i] = (float) ((4.0*decodeAudioSubcarrierGainMultiplier*fftMagnitude[audioCarrierClosestFFTBinIndex])-0.5); // The 4.0* is just a guess for now...
+                outputAudio[i] = ((10.0*decodeAudioSubcarrierGainMultiplier*fftMagnitude[audioCarrierClosestFFTBinIndex])-0.5); // The 4.0* is just a guess for now...
 
                 // Copy pixel to others if we're subsampling
                 // subsample value 1 == no subsampling
@@ -1319,9 +1326,24 @@ namespace SinusLab
                 speedReport.logEvent("Final color conversions.");
             }
 
+            // Do final audio processing and copying
+            float[] audioOutputFloat = new float[decodeL.Length];
+            if (tryRemoveAudioDecodeInterferenceFromFFTV3)
+            {
+                double nyquistFrequency = decodingSampleRate / 2;
+                double offendingFrequency = 2*(nyquistFrequency - audioSubcarrierFrequencyV3); // don't ask me why, it's just an observation.
+
+                outputAudio = FftSharp.Filter.BandStop(outputAudio, decodingSampleRate, offendingFrequency - 100, offendingFrequency + 100);
+            }
+            for(int i = 0; i < audioOutputFloat.Length; i++)
+            {
+                audioOutputFloat[i] = (float)outputAudio[i];
+            }
+
+
             DecodeResult decodeResult = new DecodeResult();
             decodeResult.imageData = decodedImage;
-            decodeResult.audioData = outputAudio;
+            decodeResult.audioData = audioOutputFloat;
             return decodeResult;
         }
         
