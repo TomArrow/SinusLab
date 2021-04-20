@@ -145,7 +145,7 @@ namespace SinusLab
 
         public enum FormatVersion {
             DEFAULT_LEGACY = 0,
-            V2 = 1, 
+            V2 = 1,
             V2_NOLUMA_DECODE_ONLY = 2,
             V3
         };
@@ -198,7 +198,7 @@ namespace SinusLab
             return outputBytes;
 
         }
-        
+
         struct AverageHelper
         {
             public double totalValue;
@@ -213,7 +213,7 @@ namespace SinusLab
         }
 
         // Note: input audio is expected to contain half the audio from the previous and half from the following frame! If not available, provide zeros there. This is required due to possible lowpass filtering/blurring and if ommitted would be likely to cause periodic discontinuities/spikes.
-        public byte[] RGB24ToStereoV2(byte[] sourceData, ref double audioEncodingPhaseOffset, bool isV3 = false,float[] inputAudioV3 = null)
+        public byte[] RGB24ToStereoV2(byte[] sourceData, ref double audioEncodingPhaseOffset, bool isV3 = false, float[] inputAudioV3 = null)
         {
 
             int pixelCount = sourceData.Length / 3;
@@ -227,27 +227,27 @@ namespace SinusLab
                 lowerFrequencyHere = lowerFrequencyV3;
 
                 // V3 can be encoded without audio, but what's the point? That was the whole reason for its creation.
-                if(inputAudioV3 != null) {
+                if (inputAudioV3 != null) {
                     int audioSampleCount = inputAudioV3.Length / 2; // Divide by 2 because we're getting half of the previous and next frame too.
                     double audioCarrierPhaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
 
                     double audioSamplesPerPixel = (double)audioSampleCount / (double)pixelCount;
-                    double audioCarrierPhaseLengthInAudioSamples = audioCarrierPhaseLength*audioSamplesPerPixel;
+                    double audioCarrierPhaseLengthInAudioSamples = audioCarrierPhaseLength * audioSamplesPerPixel;
 
-                    double[] smoothedSamples = boxBlur(inputAudioV3,(uint)(audioCarrierPhaseLengthInAudioSamples*2.0)); // I'm really just guessing here about how much I need to multiply the phase length with for the blur. It's not even a proper low pass filter or anything. But hey, this isn't science, this is games.
+                    double[] smoothedSamples = boxBlur(inputAudioV3, (uint)(audioCarrierPhaseLengthInAudioSamples * 4.0)); // I'm really just guessing here about how much I need to multiply the phase length with for the blur. It's not even a proper low pass filter or anything. But hey, this isn't science, this is games.
 
                     int readingOffset = audioSampleCount / 2; // Remember, half frame before and half after.
 
                     // We distinguish 3 cases now: there is more audio samples than pixels or less or equal.
                     //if (audioSampleCount == pixelCount)
                     //{
-                     //   Array.Copy(smoothedSamples, readingOffset, preparedAudioData, 0, preparedAudioData.Length); // Cool. Nothing much to do here.
+                    //   Array.Copy(smoothedSamples, readingOffset, preparedAudioData, 0, preparedAudioData.Length); // Cool. Nothing much to do here.
                     //} else { 
-                        // Otherwise ... just pick the closest nearby value for now... nearest neighbor. 
-                        for(uint i = 0; i < preparedAudioData.Length; i++)
-                        {
-                            preparedAudioData[i] = Math.Min(1.0,Math.Max(0.0,(smoothedSamples[readingOffset+((int)Math.Round((double)i * audioSamplesPerPixel))]/2.0+0.5))); // We're limiting the audio signal to -1 to 1 too.
-                        }
+                    // Otherwise ... just pick the closest nearby value for now... nearest neighbor. 
+                    for (uint i = 0; i < preparedAudioData.Length; i++)
+                    {
+                        preparedAudioData[i] = Math.Min(1.0, Math.Max(0.0, (smoothedSamples[readingOffset + ((int)Math.Round((double)i * audioSamplesPerPixel))] / 2.0 + 0.5))); // We're limiting the audio signal to -1 to 1 too.
+                    }
                     //}
                 }
             }
@@ -278,9 +278,9 @@ namespace SinusLab
                 phaseLengthHere = ((double)samplerate) / frequencyHere / 2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
-                //output[i] = (double)tmpV.Y / 100.0 * (maxAmplitude/2) * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
+                output[i] = (double)tmpV.Y / 100.0 * (maxAmplitude / 2) * Math.Sin(phaseHere * Math.PI); // tmpV.Y is amplitude (chrominance/saturation)
                 outputL[i] = ((double)tmpV.X - 50) * 2 / 100.0 * maxAmplitude; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
-                LforSmooth[i] = (double)tmpV.X/ 100.0; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
+                LforSmooth[i] = (double)tmpV.X / 100.0; // tmpV.Y is amplitude (chrominance/saturation). we divide amplitude by 2 here because we're also adding the amplitude modulated 30hz luma offset and dont want clipping
                 lastPhase = phaseHere % 2;
             }
 
@@ -289,7 +289,7 @@ namespace SinusLab
             // Done with a simple box blue
             double[] smoothedLuma = new double[LforSmooth.Length];
             double encodingFrequencyWavelength = samplerate / lumaInChromaFrequencyV2;
-            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength* waveLengthSmoothRadiusMultiplierEncodeV2);
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength * waveLengthSmoothRadiusMultiplierEncodeV2);
             AverageHelper averageHelper = new AverageHelper();
             for (int i = 0; i < LforSmooth.Length; i++)
             {
@@ -297,20 +297,20 @@ namespace SinusLab
                 {
                     for (int ii = 0; ii <= averageSampleRadius; ii++)
                     {
-                        if((i+ii) >= LforSmooth.Length)
+                        if ((i + ii) >= LforSmooth.Length)
                         {
                             break;
                         }
-                        averageHelper.totalValue += LforSmooth[i+ii];
+                        averageHelper.totalValue += LforSmooth[i + ii];
                         averageHelper.multiplier += 1;
                     }
-                } else { 
+                } else {
                     if (i > averageSampleRadius)
                     {
-                        averageHelper.totalValue -= LforSmooth[i-averageSampleRadius-1];
+                        averageHelper.totalValue -= LforSmooth[i - averageSampleRadius - 1];
                         averageHelper.multiplier -= 1;
                     }
-                    if((i+averageSampleRadius) < LforSmooth.Length)
+                    if ((i + averageSampleRadius) < LforSmooth.Length)
                     {
                         averageHelper.totalValue += LforSmooth[i + averageSampleRadius];
                         averageHelper.multiplier += 1;
@@ -318,26 +318,26 @@ namespace SinusLab
                 }
                 smoothedLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
             }
-            
+
             // Now encode the smoother Luma via amplitude modulation into a 500 Hz signal added to chroma:
             double phaseLength = ((double)samplerate) / lumaInChromaFrequencyV2 / 2;
             double phaseAdvancement = 1 / phaseLength;
             for (int i = 0; i < smoothedLuma.Length; i++)
             {
-                //output[i] += (maxAmplitude/2)*smoothedLuma[i] * Math.Sin(phaseAdvancement*i * Math.PI);
+                output[i] += (maxAmplitude / 2) * smoothedLuma[i] * Math.Sin(phaseAdvancement * i * Math.PI);
             }
 
             // For V3, encode a 23500 Hz signal into the image for audio
             // Only do this if samplerate bigger than 2x23500 Hz, otherwise Nyquist complains.
-            if (isV3 && samplerate > (audioSubcarrierFrequencyV3*2) && inputAudioV3 != null)
+            if (isV3 && samplerate > (audioSubcarrierFrequencyV3 * 2) && inputAudioV3 != null)
             {
                 phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
                 phaseAdvancement = 1 / phaseLength;
                 for (int i = 0; i < preparedAudioData.Length; i++)
                 {
-                    output[i] += (maxAmplitude / 2)* preparedAudioData[i]* Math.Sin((audioEncodingPhaseOffset+ (double)phaseAdvancement * (double)i) * Math.PI);
+                    output[i] += (maxAmplitude / 2) * preparedAudioData[i] * Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI);
                 }
-                audioEncodingPhaseOffset += (double)(preparedAudioData.Length)*phaseAdvancement;
+                audioEncodingPhaseOffset += (double)(preparedAudioData.Length) * phaseAdvancement;
                 audioEncodingPhaseOffset %= 2;
             }
 
@@ -360,15 +360,15 @@ namespace SinusLab
         {
             double frequencyRange = upperFrequency - lowerFrequency;
 
-            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2,Math.Ceiling(Math.Log((double)windowSize*(double)decodingSampleRate/48000.0,2.0))) : windowSize;
+            int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
 
             double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeL = new double[sourceData.Length / 8];
 
             for (int i = 0; i < decodeL.Length; i++)
             {
-                decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier*BitConverter.ToSingle(sourceData, i * 4 * 2);
-                decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
             }
 
             double[] audioPart = new double[windowSizeHere];
@@ -397,7 +397,7 @@ namespace SinusLab
             {
                 Array.Copy(decode, i, audioPart, 0, windowSizeHere);
                 //double[] window = FftSharp.Window.Hanning(audioPart.Length);
-                double[] window = FftSharp.Window.GetWindowByName(windowFunction.ToString(),audioPart.Length);
+                double[] window = FftSharp.Window.GetWindowByName(windowFunction.ToString(), audioPart.Length);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
                 fftMagnitude = FftSharp.Transform.FFTmagnitude(audioPart);
 
@@ -450,7 +450,7 @@ namespace SinusLab
 
             return output;
         }
-        
+
         [Obsolete("Use fast version instead, this one hasn't been updated in a while.")]
         public byte[] StereoToRGB24V2(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false)
         {
@@ -458,8 +458,8 @@ namespace SinusLab
 
             int windowSizeHere = windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)decodingSampleRate / 48000.0, 2.0))) : windowSize;
 
-            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2* decodingSampleRate);
-            int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
+            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1 / lumaInChromaFrequencyV2 * decodingSampleRate);
+            int windowSizeForLFLuma = (int)Math.Pow(2, Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency, 2)));
 
             double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
@@ -470,11 +470,11 @@ namespace SinusLab
                 decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
                 for (int i = 0; i < decodeL.Length; i++)
                 {
-                    decodeL[i] = decodeLumaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier*decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
-                Array.Copy(decode, windowSizeHere / 2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
+                Array.Copy(decode, windowSizeHere / 2, decodeForLFLuma, windowSizeForLFLuma / 2, decodeL.Length);
             } else
             {
                 for (int i = 0; i < decodeL.Length; i++)
@@ -484,11 +484,11 @@ namespace SinusLab
                     decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
                 }
             }
-            
 
 
 
-            
+
+
 
             //double[] c = new double[decodeL.Length];
             //double[] h = new double[decodeL.Length];
@@ -583,12 +583,12 @@ namespace SinusLab
                 //decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
                 if (superHighQuality)
                 {
-                    decodedLFLuma[i] = decodeLFLumaGainMultiplier/decodeChromaGainMultiplier* 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
                 } else
                 {
                     decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 0.6 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
                 }
-                
+
                 // For Window size 128: [1] is 0.16735944031697095  [2] is 0.13069097631912735
                 //decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735))/2;
                 //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
@@ -616,7 +616,7 @@ namespace SinusLab
             // Now we smooth the luma so we can calculate the correct offset.
             double[] smoothedLuma = new double[decodeL.Length];
             double encodingFrequencyWavelength = decodingSampleRate / lumaInChromaFrequencyV2;
-            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength*waveLengthSmoothRadiusMultiplierDecodeV2);
+            int averageSampleRadius = (int)Math.Ceiling(encodingFrequencyWavelength * waveLengthSmoothRadiusMultiplierDecodeV2);
             AverageHelper averageHelper = new AverageHelper();
             if (decodeLFLuma)
             {
@@ -684,7 +684,7 @@ namespace SinusLab
                     }
                     smoothedLFLuma[i] = averageHelper.totalValue / averageHelper.multiplier;
                 }
-                
+
 
                 for (int i = 0; i < decodeL.Length; i++)
                 {
@@ -718,20 +718,42 @@ namespace SinusLab
                 }
             }
 
-            
+
 
 
             return output;
         }
 
-        // set fftSampleIntervalInRelationToWindowSize to 0 or lower to disable fast processing.
+        // This will automatically add the required handles filled with zero. Call as the other functions.
         public DecodeResult StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
+        {
+            int pixelCount = sourceData.Length / 8;
+            uint handleLength = (uint)Math.Ceiling((double)pixelCount/2.0);
+            uint pixelCountDivisibleBy2 = handleLength * 2; // Must be divisible by 2 because how else will the function this is passed to calculate where exactly the data starts otherwise?
+            byte[] sourceDataWithHandles = new byte[pixelCountDivisibleBy2 * 2 * 8];
+            Array.Copy(sourceData,0,sourceDataWithHandles,handleLength*8,sourceData.Length);
+
+            return StereoToRGB24V2FastWithHandles(sourceData,decodingSampleRate,decodeLFLuma,superHighQuality,fftSampleIntervalInRelationToWindowSize,normalizeLFLuma,normalizeSaturation,subsample,compensationMode,isV3,speedReport,cancelToken);
+        }
+
+        // This version of the function needs the sourceData to have half the previous frame and half the next frame as a handle to improve fft continuity and as such the data itself should be divisible by 2 or unexpected errors might occur. Especially important for audio subcarrier decoding. Call the other function if you don't care about that, it will add the handles automatically (zeros, obviously).
+        // set fftSampleIntervalInRelationToWindowSize to 0 or lower to disable fast processing.
+        public DecodeResult StereoToRGB24V2FastWithHandles(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
 
             if (speedReport != null)
             {
                 speedReport.setPrefix("StereoToRGB24V2Fast");
             }
+
+            int actualSourceDataLengthInPixels = sourceData.Length /8 / 2; // Divided by 2 because we get handles. Half the previous and half the next frame
+            int handleLength = actualSourceDataLengthInPixels / 2;
+
+            if(windowSize > handleLength / 2)
+            {
+                throw new Exception("If this error happened, you are doing something really really extreme.");
+            }
+
 
 
             /*if (superHighQuality)
