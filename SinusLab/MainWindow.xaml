@@ -158,6 +158,7 @@
                     </GroupBox>
                     <GroupBox Header="Decode">
                         <StackPanel>
+
                             <WrapPanel>
                                 <Label>Max threads:</Label>
                                 <Label x:Name="lblMaxThreads"></Label>
@@ -165,52 +166,63 @@
                                 <TextBlock TextWrapping="Wrap" x:Name="txtMaxThreadsError" Foreground="Red"></TextBlock>
                                 <TextBlock TextWrapping="Wrap">(advice: increase thread count only for very small resolutions)</TextBlock>
                             </WrapPanel>
+                            <TabControl>
+                                <TabItem Header="Gains">
+                                    <StackPanel>
+                                        <Label>Gain/Multiply (log 2 scale)</Label>
+                                        <WrapPanel>
+                                            <Slider x:Name="gainSlider" Width="120" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                            <TextBox x:Name="gainTextBox" Width="30" Text="{Binding ElementName=gainSlider, Path=Value}"></TextBox>
+                                        </WrapPanel>
+                                        <Label>Luma Gain/Multiply (log 2 scale)</Label>
+                                        <WrapPanel>
+                                            <Slider x:Name="gainSlider_Luma" Width="120" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Luma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                            <TextBox x:Name="gainTextBox_Luma" Width="30" Text="{Binding ElementName=gainSlider_Luma, Path=Value}"></TextBox>
+                                        </WrapPanel>
+                                        <Label>Chroma Gain/Multiply (log 2 scale)</Label>
+                                        <WrapPanel>
+                                            <Slider x:Name="gainSlider_Chroma" Width="120" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Chroma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                            <TextBox x:Name="gainTextBox_Chroma" Width="30" Text="{Binding ElementName=gainSlider_Chroma, Path=Value}"></TextBox>
+                                        </WrapPanel>
 
+                                        <GroupBox Header="Only V2">
 
-                            <Label>FFT window function</Label>
-                            <ComboBox x:Name="cmbFFTWindowFunction" SelectionChanged="cmbFFTWindowFunction_SelectionChanged">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}"></TextBlock>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                                <!--<ComboBoxItem>Rectangular</ComboBoxItem>
-                                <ComboBoxItem IsSelected="True">Hanning</ComboBoxItem>
-                                <ComboBoxItem>Hamming</ComboBoxItem>
-                                <ComboBoxItem>Blackman</ComboBoxItem>
-                                <ComboBoxItem>BlackmanExact</ComboBoxItem>
-                                <ComboBoxItem>BlackmanHarris</ComboBoxItem>
-                                <ComboBoxItem>FlatTop</ComboBoxItem>
-                                <ComboBoxItem>Bartlett</ComboBoxItem>
-                                <ComboBoxItem>Cosine</ComboBoxItem>-->
-                            </ComboBox>
-                            <Label>Gain/Multiply (log 2 scale)</Label>
-                            <WrapPanel>
-                                <Slider x:Name="gainSlider" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
-                                <TextBox x:Name="gainTextBox" Width="30" Text="{Binding ElementName=gainSlider, Path=Value}"></TextBox>
-                            </WrapPanel>
-                            <Label>Luma Gain/Multiply (log 2 scale)</Label>
-                            <WrapPanel>
-                                <Slider x:Name="gainSlider_Luma" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Luma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
-                                <TextBox x:Name="gainTextBox_Luma" Width="30" Text="{Binding ElementName=gainSlider_Luma, Path=Value}"></TextBox>
-                            </WrapPanel>
-                            <Label>Chroma Gain/Multiply (log 2 scale)</Label>
-                            <WrapPanel>
-                                <Slider x:Name="gainSlider_Chroma" Width="140" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_Chroma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
-                                <TextBox x:Name="gainTextBox_Chroma" Width="30" Text="{Binding ElementName=gainSlider_Chroma, Path=Value}"></TextBox>
-                            </WrapPanel>
+                                            <StackPanel>
+
+                                                <Label>LF Luma Gain/Multiply (log 2 scale)</Label>
+                                                <WrapPanel>
+                                                    <Slider x:Name="gainSlider_LFLuma" Width="110" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_LFLuma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
+                                                    <TextBox x:Name="gainTextBox_LFLuma" Width="30" Text="{Binding ElementName=gainSlider_LFLuma, Path=Value}"></TextBox>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                    </StackPanel>
+                                </TabItem>
+                                <TabItem Header="FFT">
+                                    <StackPanel>
+                                        <Label>FFT window function</Label>
+                                        <ComboBox x:Name="cmbFFTWindowFunction" SelectionChanged="cmbFFTWindowFunction_SelectionChanged">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}"></TextBlock>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <GroupBox Header="Only V3">
+
+                                            <StackPanel>
+                                                <CheckBox x:Name="checkTryRemoveFFTArtifactsV3" Checked="checkTryRemoveFFTArtifactsV3_Checked" Unchecked="checkTryRemoveFFTArtifactsV3_Unchecked">Try remove FFT artifact frequency</CheckBox>
+                                                <TextBlock TextWrapping="Wrap">This is extremely slow. Advice: Use for low resolution/realtime scenarios where the artifact frequency is audible.</TextBlock>
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                    </StackPanel>
+                                </TabItem>
+                            </TabControl>
+
                             
-                            <GroupBox Header="Only V2">
-
-                                <StackPanel>
-
-                                    <Label>LF Luma Gain/Multiply (log 2 scale)</Label>
-                                    <WrapPanel>
-                                        <Slider x:Name="gainSlider_LFLuma" Width="130" Minimum="-5" Maximum="5" Value="{Binding ElementName=gainTextBox_LFLuma, Path=Text}" ValueChanged="gainSlider_ValueChanged"></Slider>
-                                        <TextBox x:Name="gainTextBox_LFLuma" Width="30" Text="{Binding ElementName=gainSlider_LFLuma, Path=Value}"></TextBox>
-                                    </WrapPanel>
-                                </StackPanel>
-                            </GroupBox>
                         </StackPanel>
                     </GroupBox>
                 </StackPanel>

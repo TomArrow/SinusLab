@@ -24,6 +24,8 @@ namespace SinusLab
 
         uint maxDecodeSampleRate = 96000;
 
+        bool tryRemoveFFTArtifactFrequency = false;
+
         private bool isInitialized = false;
         public MainWindow()
         {
@@ -930,7 +932,7 @@ namespace SinusLab
                             switch (formatVersion) // some functions calll core.removeHandles<byte>(srcDataByte), because the data we get here has handles from previous and later frames (half of each) for better fft continuity, and some of the older functions dont accept that.
                             {
                                 case SinusLabCore.FormatVersion.V3:
-                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, isV3: true) : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
+                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, isV3: true,tryRemoveAudioDecodeInterferenceFromFFTV3: tryRemoveFFTArtifactFrequency) : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true, tryRemoveAudioDecodeInterferenceFromFFTV3: tryRemoveFFTArtifactFrequency);
                                     output = decodeResult.imageData;
                                     outputAudio = decodeResult.audioData;
                                     break;
@@ -1310,6 +1312,7 @@ namespace SinusLab
                     //MessageBox.Show("Cannot set a sample rate below 40 kHz because chroma is encoded to 20kHz and Nyquist said so. If you want to just run it slower, convert to 48k and then reinterpret the output file as something lower, and then reverse it again.");
                 }
             }
+            tryRemoveFFTArtifactFrequency = checkTryRemoveFFTArtifactsV3.IsChecked == true;
             previewDecodeLuma = checkboxPreviewLFLumaDecode.IsChecked == true;
             previewDecodeFast = checkboxPreviewFastDecode.IsChecked == true;
             previewSuperHighQuality = checkboxPreviewUHQ.IsChecked == true;
@@ -1357,6 +1360,7 @@ namespace SinusLab
 
             previewDrawingTask = Task.Run(()=> {
 
+                SpeedReport mySpeedReport = new SpeedReport();
                 byte[] srcDataByte = new byte[srcData.Length * 4];
                 Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
                 srcData = null;
@@ -1365,14 +1369,20 @@ namespace SinusLab
 
                 byte[] output;
 
+                mySpeedReport.setPrefix("Preview generation");
+                mySpeedReport.logEvent("Starting subsampled (8) low quality preview.");
                 //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
-                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET,previewFormatVersion == SinusLabCore.FormatVersion.V3,  null,  cancellationToken).imageData;
+                output =  core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, 0.5, false, false, 8, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, tryRemoveFFTArtifactFrequency, mySpeedReport, cancellationToken).imageData;
+                
 
                 cancellationToken.ThrowIfCancellationRequested();
+                mySpeedReport.setPrefix("Preview generation");
+                mySpeedReport.logEvent("Subsampled image finished.");
                 //srcDataByte = null;
                 LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
+                mySpeedReport.logEvent("Converted to LinearAccessByteImageUnsignedNonVectorized.");
 
                 Dispatcher.Invoke(()=> {
                     Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
@@ -1384,6 +1394,9 @@ namespace SinusLab
                     }
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                 });
+
+                mySpeedReport.logEvent("Subsampled review drawn.");
+
                 previewFrameIndexActuallyDisplayed = thisPreviewFrameIndex;
                 previewImageSaveSuffix = basePreviewImageSaveSuffix +"_sub8";
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1398,9 +1411,16 @@ namespace SinusLab
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
                 });*/
+
+                mySpeedReport.logEvent("Starting full quality preview.");
                 // Now for he high quality version:
-                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, null,  cancellationToken).imageData;
-                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame); 
+                output = core.StereoToRGB24V2Fast(srcDataByte, previewWaveSource.getWavInfo().sampleRate, thisPreviewDecodeLuma, superHighQuality, previewDecodeFast ? 0.5 : -1, false, false, 1, SinusLabCore.LowFrequencyLumaCompensationMode.OFFSET, previewFormatVersion == SinusLabCore.FormatVersion.V3, tryRemoveFFTArtifactFrequency, mySpeedReport,  cancellationToken).imageData;
+
+                mySpeedReport.setPrefix("Preview generation");
+                mySpeedReport.logEvent("Full quality preview finished.");
+
+                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                mySpeedReport.logEvent("Converted to LinearAccessByteImageUnsignedNonVectorized.");
                 output = null;
                 cancellationToken.ThrowIfCancellationRequested();
                 Dispatcher.Invoke(() => {
@@ -1414,7 +1434,10 @@ namespace SinusLab
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
                 });
+                mySpeedReport.logEvent("Full quality preview drawn.");
                 previewImageSaveSuffix = basePreviewImageSaveSuffix + "_full";
+                Dispatcher.Invoke(()=> { MessageBox.Show(mySpeedReport.getFormattedList()); });
+                mySpeedReport.Stop();
 
             }, cancellationToken);
 
@@ -1595,6 +1618,20 @@ namespace SinusLab
         private void btnW64ToVideoV3_Click(object sender, RoutedEventArgs e)
         {
             w64ToVideoMultiThreadedAsync(false, SinusLabCore.FormatVersion.V3);
+        }
+
+        private void checkTryRemoveFFTArtifactsV3_Checked(object sender, RoutedEventArgs e)
+        {
+
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void checkTryRemoveFFTArtifactsV3_Unchecked(object sender, RoutedEventArgs e)
+        {
+
+            updateSettings();
+            redrawPreview();
         }
     }
 }
