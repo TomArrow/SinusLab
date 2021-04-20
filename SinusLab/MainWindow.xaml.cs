@@ -922,23 +922,23 @@ namespace SinusLab
 
                             byte[] output = null;
                             float[] outputAudio = null;
-                            switch (formatVersion)
+                            switch (formatVersion) // some functions calll core.removeHandles<byte>(srcDataByte), because the data we get here has handles from previous and later frames (half of each) for better fft continuity, and some of the older functions dont accept that.
                             {
                                 case SinusLabCore.FormatVersion.V3:
-                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality,isV3:true) : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
+                                    SinusLabCore.DecodeResult decodeResult = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality,isV3:true) : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1, isV3: true);
                                     output = decodeResult.imageData;
                                     outputAudio = decodeResult.audioData;
                                     break;
                                 case SinusLabCore.FormatVersion.V2_NOLUMA_DECODE_ONLY:
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, false).imageData : core.StereoToRGB24V2(srcDataByte, sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
+                                    output = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, false).imageData : core.StereoToRGB24V2(core.removeHandles<byte>(srcDataByte), sampleRate, false); // Super high quality is really irrelevant here because it doesn't do LF luma decoding
                                     break;
                                 case SinusLabCore.FormatVersion.V2:
                                     //output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality) : core.StereoToRGB24V2(srcDataByte, sampleRate, true, superHighQuality);
-                                    output = fast ? core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality).imageData : core.StereoToRGB24V2Fast(srcDataByte, sampleRate, true, superHighQuality, -1).imageData;
+                                    output = fast ? core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality).imageData : core.StereoToRGB24V2FastWithHandles(srcDataByte, sampleRate, true, superHighQuality, -1).imageData;
                                     break;
                                 case SinusLabCore.FormatVersion.DEFAULT_LEGACY:
                                 default:
-                                    output = fast ? core.StereoToRGB24Fast(srcDataByte, sampleRate) : core.StereoToRGB24(srcDataByte, sampleRate);
+                                    output = fast ? core.StereoToRGB24Fast(core.removeHandles<byte>(srcDataByte), sampleRate) : core.StereoToRGB24(core.removeHandles<byte>(srcDataByte), sampleRate);
                                     break;
                             }
                             //byte[] output = fast ? core.StereoToRGB24Fast(srcDataByte) : core.StereoToRGB24(srcDataByte);
@@ -1027,6 +1027,9 @@ namespace SinusLab
                             Bitmap tmpBitmap;
 
 
+                            UInt64 audioSampleHandleSize = imageLength / 2;
+
+
                             while (imagesLeft > 0)
                             {
                                 int numberOfThreadsCurrentlyProcessing = 0;
@@ -1049,7 +1052,22 @@ namespace SinusLab
                                         if (!imagesProcessed[a] && !imagesProcessing[a]) {
                                             imagesProcessing[a] = true;
 
-                                            srcData = wavFile.getAs32BitFloatFast(imageLength * a, imageLength * (a + 1) - 1);
+                                            srcData = new float[(int)imageLength * 2*2]; // twice bc 2 channels but also twice bc handles.
+                                            // We need to include handles, hence its a bit more complex than originally
+                                            if (a == 0)
+                                            {
+                                                float[] tmpData = wavFile.getAs32BitFloatFast(imageLength * a, Math.Min(wavFile.DataLengthInTicks-1, imageLength * (a + 1) - 1 + audioSampleHandleSize));
+                                                Array.Copy(tmpData,0,srcData,(int)audioSampleHandleSize*2,tmpData.Length); // times 2 because 2 channels
+                                            }
+                                            else
+                                            {
+                                                // We know we can subtract audioSampleHandleSize here because it's the second image and the audioSampleHandleSize is exactly half an image.
+                                                float[] tmpData = wavFile.getAs32BitFloatFast(imageLength * a - audioSampleHandleSize, Math.Min(wavFile.DataLengthInTicks - 1, imageLength * (a + 1) - 1 + audioSampleHandleSize));
+                                                Array.Copy(tmpData, 0, srcData,0, tmpData.Length);
+                                            }
+                                            
+                                            
+                                            //srcData = wavFile.getAs32BitFloatFast(imageLength * a, imageLength * (a + 1) - 1);
 
                                             Task.Run(convertWorker(srcData,(int)a,fast));
                                             srcData = null;

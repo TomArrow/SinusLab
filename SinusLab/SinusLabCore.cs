@@ -724,6 +724,16 @@ namespace SinusLab
             return output;
         }
 
+        // Will chop of handles some functions use to have half of the previous and next frame
+        public T[] removeHandles<T>(T[] inputArray)
+        {
+            T[] output = new T[inputArray.Length/2];
+
+            Array.Copy(inputArray,inputArray.Length/4,output,0,output.Length);
+
+            return output;
+        }
+
         // This will automatically add the required handles filled with zero. Call as the other functions.
         public DecodeResult StereoToRGB24V2Fast(byte[] sourceData, double decodingSampleRate, bool decodeLFLuma = true, bool superHighQuality = false, double fftSampleIntervalInRelationToWindowSize = 0.5, bool normalizeLFLuma = false, bool normalizeSaturation = false, uint subsample = 1, LowFrequencyLumaCompensationMode compensationMode = LowFrequencyLumaCompensationMode.OFFSET, bool isV3 = false, SpeedReport speedReport = null, CancellationToken cancelToken = default)
         {
@@ -732,8 +742,9 @@ namespace SinusLab
             uint pixelCountDivisibleBy2 = handleLength * 2; // Must be divisible by 2 because how else will the function this is passed to calculate where exactly the data starts otherwise?
             byte[] sourceDataWithHandles = new byte[pixelCountDivisibleBy2 * 2 * 8];
             Array.Copy(sourceData,0,sourceDataWithHandles,handleLength*8,sourceData.Length);
+            sourceData = null;
 
-            return StereoToRGB24V2FastWithHandles(sourceData,decodingSampleRate,decodeLFLuma,superHighQuality,fftSampleIntervalInRelationToWindowSize,normalizeLFLuma,normalizeSaturation,subsample,compensationMode,isV3,speedReport,cancelToken);
+            return StereoToRGB24V2FastWithHandles(sourceDataWithHandles, decodingSampleRate,decodeLFLuma,superHighQuality,fftSampleIntervalInRelationToWindowSize,normalizeLFLuma,normalizeSaturation,subsample,compensationMode,isV3,speedReport,cancelToken);
         }
 
         // This version of the function needs the sourceData to have half the previous frame and half the next frame as a handle to improve fft continuity and as such the data itself should be divisible by 2 or unexpected errors might occur. Especially important for audio subcarrier decoding. Call the other function if you don't care about that, it will add the handles automatically (zeros, obviously).
@@ -784,27 +795,52 @@ namespace SinusLab
             double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1/lumaInChromaFrequencyV2*decodingSampleRate);
             int windowSizeForLFLuma = (int)Math.Pow(2,Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency,2)));
 
-            double[] decode = new double[sourceData.Length / 8 + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
+            double[] decode = new double[actualSourceDataLengthInPixels + windowSizeHere]; // leave windowSize amount of zeros at beginning to avoid if later.
             double[] decodeForLFLuma = new double[1]; // leave windowSize amount of zeros at beginning to avoid if later.
-            double[] decodeL = new double[sourceData.Length / 8];
+            double[] decodeL = new double[actualSourceDataLengthInPixels];
+
+            int startValue = -Math.Max(windowSizeHere/2,decodeLFLuma? windowSizeForLFLuma/2 : 0); // This way we include information from the handles.
+            int handleLengthInBytes = handleLength * 2 * 4;
+            int endValue = decodeL.Length + (-startValue*2);
 
             if (decodeLFLuma)
             {
-                decodeForLFLuma = new double[sourceData.Length / 8 + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
-                for (int i = 0; i < decodeL.Length; i++)
+                decodeForLFLuma = new double[actualSourceDataLengthInPixels + windowSizeForLFLuma]; // leave windowSize amount of zeros at beginning to avoid if later.
+                for (int i = startValue; i < endValue; i++) // This all probably needs to be optimized with the many ifs inside the loop, but oh well...
                 {
-                    decodeL[i] = decodeLumaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
-                    decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier* decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    if (i >= 0 && i<decodeL.Length) // These ones don't get handles, they're just raw data.
+                    {
+                        decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, (i+ handleLength) * 4 * 2);
+                        decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                    }
+                    if ((i+windowSizeHere/2) >=0 && (i + windowSizeHere / 2) < decode.Length)
+                    {
+                        decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, (i + handleLength) * 4 * 2 + 4);
+                        decodeForLFLuma[i + windowSizeForLFLuma / 2/*+ windowSize*/] = decode[i + windowSizeHere / 2/*+ windowSize*/];
+                    }
+                    else if ((i+ windowSizeForLFLuma / 2) >=0 && (i + windowSizeForLFLuma / 2) < decodeForLFLuma.Length)
+                    {
+                        decodeForLFLuma[i + windowSizeForLFLuma / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, (i + handleLength) * 4 * 2 + 4);
+                    }
+                    
                 }
                 Array.Copy(decode, windowSizeHere / 2,decodeForLFLuma,windowSizeForLFLuma/2,decodeL.Length);
             } else
             {
-                for (int i = 0; i < decodeL.Length; i++)
+                for (int i = startValue; i < endValue; i++)
                 {
-                    decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
+                    if (i >= 0 && i < decodeL.Length) // These ones don't get handles, they're just raw data.
+                    {
+                        decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, (i + handleLengthInBytes) * 4 * 2);
+                        decodeL[i] = (decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
+                    }
+                    if ((i + windowSizeHere / 2) >= 0 && (i + windowSizeHere / 2) < decode.Length)
+                    {
+                        decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, (i + handleLength) * 4 * 2 + 4);
+                    }
+                    /*decodeL[i] = decodeLumaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2);
                     decodeL[i] = ( decodeL[i] / 2 / maxAmplitude + 0.5) * 100;
-                    decode[i + windowSizeHere / 2/*+ windowSize*/] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);
+                    decode[i + windowSizeHere / 2] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);*/
                 }
             }
 
