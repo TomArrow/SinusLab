@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SinusLab
+namespace Experiments
 {
     class SuperWAV : IDisposable
     {

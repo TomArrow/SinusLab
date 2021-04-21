@@ -3,12 +3,39 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace SinusLab
 {
+
+    /*
+     * Useful info:
+     * from: https://stackoverflow.com/a/2840824
+     *  Secant Sec(X) = 1 / Cos(X) 
+        Cosecant Cosec(X) = 1 / Sin(X) 
+        Cotangent Cotan(X) = 1 / Tan(X) 
+        Inverse Sine Arcsin(X) = Atn(X / Sqr(-X * X + 1)) 
+        Inverse Cosine Arccos(X) = Atn(-X / Sqr(-X * X + 1)) + 2 * Atn(1) 
+        Inverse Secant Arcsec(X) = 2 * Atn(1) - Atn(Sgn(X) / Sqr(X * X - 1)) 
+        Inverse Cosecant Arccosec(X) = Atn(Sgn(X) / Sqr(X * X - 1)) 
+        Inverse Cotangent Arccotan(X) = 2 * Atn(1) - Atn(X) 
+        Hyperbolic Sine HSin(X) = (Exp(X) - Exp(-X)) / 2 
+        Hyperbolic Cosine HCos(X) = (Exp(X) + Exp(-X)) / 2 
+        Hyperbolic Tangent HTan(X) = (Exp(X) - Exp(-X)) / (Exp(X) + Exp(-X)) 
+        Hyperbolic Secant HSec(X) = 2 / (Exp(X) + Exp(-X)) 
+        Hyperbolic Cosecant HCosec(X) = 2 / (Exp(X) - Exp(-X)) 
+        Hyperbolic Cotangent HCotan(X) = (Exp(X) + Exp(-X)) / (Exp(X) - Exp(-X)) 
+        Inverse Hyperbolic Sine HArcsin(X) = Log(X + Sqr(X * X + 1)) 
+        Inverse Hyperbolic Cosine HArccos(X) = Log(X + Sqr(X * X - 1)) 
+        Inverse Hyperbolic Tangent HArctan(X) = Log((1 + X) / (1 - X)) / 2 
+        Inverse Hyperbolic Secant HArcsec(X) = Log((Sqr(-X * X + 1) + 1) / X) 
+        Inverse Hyperbolic Cosecant HArccosec(X) = Log((Sgn(X) * Sqr(X * X + 1) + 1) / X) 
+        Inverse Hyperbolic Cotangent HArccotan(X) = Log((X + 1) / (X - 1)) / 2 
+        Logarithm to base N LogN(X) = Log(X) / Log(N)
+     */
 
     class SpeedReport
     {
@@ -79,6 +106,8 @@ namespace SinusLab
     class SinusLabCore
     {
 
+        
+
         public struct DecodeResult
         {
             public byte[] imageData;
@@ -92,11 +121,13 @@ namespace SinusLab
         public int lowerFrequencyV3 = 3000; // Kept same as in V2
         public int upperFrequency = 20000;
         public int upperFrequencyV2 = 20000;
-        public int upperFrequencyV3 = 18000;
+        public int upperFrequencyV3 = 15000;
         double lumaInChromaFrequencyV2 = 500.0;
         double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
-        double audioSubcarrierFrequencyV3 = 22000.0; // formerly 23500 - created modulation problems at 48khz
+        double audioSubcarrierFrequencyV3 = 18000.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
+        double audioSubcarrierFrequencyV3Lower = 18000.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
+        double audioSubcarrierFrequencyV3Upper = 23500.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
 
         public double AudioSubcarrierFrequencyV3
         {
@@ -149,6 +180,50 @@ namespace SinusLab
             V2_NOLUMA_DECODE_ONLY = 2,
             V3
         };
+
+        // a = lower phase length
+        // b = upper phase length
+        // Use these to set the frequency range.
+        // Hmm damn it just ended up creating exactly the two frequencies I provided and nothing else. strange!  So mathematically the two frequencies bordering a band are equivalent to the sum of all the frequencies in between! Now that's a mindfuck. That's all assuming wolfram was correct,anyway.
+        // So I guess ignore this function.
+        /*Forget these, these are all trash. They are all phase aligned so garbage.
+         * public double multiFreq(double x,double a,double b)
+        {
+            return Math.Abs(x)*(-Math.Cos(a*Math.PI*x)+Math.Cos(b*Math.PI*x))/(Math.PI*x*(a-b));
+        }
+        // s = stepsize
+        // Needs special handling when sx/2 is an integer. So then basically just do the normal adding I suppose.
+        
+        public double multiFreqStepwise(double x,double a,double b,double s)
+        {
+            double sx2 = s * x / 2;
+            if ((double)(int)sx2 == sx2)
+            {
+                // Special case
+                throw new Exception("Not properly implemented yet");
+            }
+            else
+            {
+                return s * (
+                    (1 / Math.Sin(Math.PI * s * x / 2)) * Math.Sin(0.5 * (2 * Math.PI * b * x + Math.PI * s * x - Math.PI))
+                    - (1 / Math.Sin(Math.PI * s * x / 2)) * Math.Sin(0.5 * (2 * Math.PI * a * x - Math.PI * s * x - Math.PI))
+                    ) / (2 * (b - a));
+            }
+        }*/
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public double multiFreqStepwise(double x, double a, double b, double s)
+        {
+            double output = 0;
+            double kMax = (b - a) / s;
+            for (double k = 0; k <= kMax; k += 1)
+            {
+                output += Math.Sin((x + k / (b - a)) * Math.PI * (a + k * s));
+            }
+            output /= Math.Sqrt(kMax);
+            return output;
+        }
+
 
         public byte[] RGB24ToStereo(byte[] sourceData)
         {
@@ -331,11 +406,18 @@ namespace SinusLab
             // Only do this if samplerate bigger than 2x23500 Hz, otherwise Nyquist complains.
             if (isV3 && samplerate > (audioSubcarrierFrequencyV3 * 2) && inputAudioV3 != null)
             {
-                phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
-                phaseAdvancement = 1 / phaseLength;
+
+                double phaseLengthLower = ((double)samplerate) / audioSubcarrierFrequencyV3Lower / 2;
+                double phaseAdvancementLower = 1 / phaseLengthLower;
+                double phaseLengthUpper = ((double)samplerate) / audioSubcarrierFrequencyV3Upper / 2;
+                double phaseAdvancementUpper = 1 / phaseLengthUpper;
+                double stepSize = (phaseAdvancementUpper - phaseAdvancementLower) / 100;
+                //phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
+                //phaseAdvancement = 1 / phaseLength;
                 for (int i = 0; i < preparedAudioData.Length; i++)
                 {
-                    output[i] += (maxAmplitude / 2) * preparedAudioData[i] * Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI);
+                    //output[i] += (maxAmplitude / 2) * preparedAudioData[i] * Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI);
+                    output[i] += (maxAmplitude / 2) * preparedAudioData[i] * multiFreqStepwise(i,phaseAdvancementLower,phaseAdvancementUpper, stepSize); //Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI); // Switched to frequency range.
                 }
                 audioEncodingPhaseOffset += (double)(preparedAudioData.Length) * phaseAdvancement;
                 audioEncodingPhaseOffset %= 2;
@@ -876,6 +958,7 @@ namespace SinusLab
             // Find closest frequency for audio.
             double smallestDifference = double.PositiveInfinity;
             int audioCarrierClosestFFTBinIndex = 0;
+            //List<int> audioCarrierFreqsList = new List<int>(); // We're gonna average all these.
             for(int i = 0; i < freqs.Length; i++)
             {
                 double distanceHere = Math.Abs(freqs[i] - audioSubcarrierFrequencyV3);
