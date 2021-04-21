@@ -38,13 +38,15 @@ namespace Experiments
             double frequencyLower = 500;
             double frequencyUpper = 40000;
             double frequencyRange = frequencyUpper - frequencyLower;
+            double frequencyMiddle = frequencyLower + frequencyRange / 2;
 
             double lastPhase = 0,phaseHere = 0;
 
             double frequencyHere, phaseLengthHere, phaseAdvancementHere;
             for (int i = 0; i < output.Length; i++)
             {
-                frequencyHere = frequencyLower+Math.Abs((lastPhase%1) - 0.5)*frequencyRange;
+                //frequencyHere = frequencyLower+Math.Abs((lastPhase%1) - 0.5)*frequencyRange;
+                frequencyHere = frequencyMiddle + ((lastPhase+0.5)%1.0-0.5)*2* Math.Sign(lastPhase)*frequencyRange;
                 phaseLengthHere = sampleRate/ frequencyHere / 2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
