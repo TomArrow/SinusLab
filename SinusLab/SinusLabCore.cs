@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+
 namespace SinusLab
 {
 
@@ -407,17 +408,17 @@ namespace SinusLab
             if (isV3 && samplerate > (audioSubcarrierFrequencyV3 * 2) && inputAudioV3 != null)
             {
 
-                double phaseLengthLower = ((double)samplerate) / audioSubcarrierFrequencyV3Lower / 2;
-                double phaseAdvancementLower = 1 / phaseLengthLower;
-                double phaseLengthUpper = ((double)samplerate) / audioSubcarrierFrequencyV3Upper / 2;
-                double phaseAdvancementUpper = 1 / phaseLengthUpper;
-                double stepSize = (phaseAdvancementUpper - phaseAdvancementLower) / 100;
-                //phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
-                //phaseAdvancement = 1 / phaseLength;
+                //double phaseLengthLower = ((double)samplerate) / audioSubcarrierFrequencyV3Lower / 2;
+                //double phaseAdvancementLower = 1 / phaseLengthLower;
+                //double phaseLengthUpper = ((double)samplerate) / audioSubcarrierFrequencyV3Upper / 2;
+                //double phaseAdvancementUpper = 1 / phaseLengthUpper;
+                //double stepSize = (phaseAdvancementUpper - phaseAdvancementLower) / 100;
+                phaseLength = ((double)samplerate) / audioSubcarrierFrequencyV3 / 2;
+                phaseAdvancement = 1 / phaseLength;
                 for (int i = 0; i < preparedAudioData.Length; i++)
                 {
-                    //output[i] += (maxAmplitude / 2) * preparedAudioData[i] * Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI);
-                    output[i] += (maxAmplitude / 2) * preparedAudioData[i] * multiFreqStepwise(i,phaseAdvancementLower,phaseAdvancementUpper, stepSize); //Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI); // Switched to frequency range.
+                    output[i] += (maxAmplitude / 2) * preparedAudioData[i] * Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI);
+                    //output[i] += (maxAmplitude / 2) * preparedAudioData[i] * multiFreqStepwise(i,phaseAdvancementLower,phaseAdvancementUpper, stepSize); //Math.Sin((audioEncodingPhaseOffset + (double)phaseAdvancement * (double)i) * Math.PI); // Switched to frequency range.
                 }
                 audioEncodingPhaseOffset += (double)(preparedAudioData.Length) * phaseAdvancement;
                 audioEncodingPhaseOffset %= 2;
@@ -1020,6 +1021,9 @@ namespace SinusLab
 
             double highestLFLumaValue = 0;
 
+            int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSize);
+
+            // Main loop
             // decode c,h components and low frequency luma
             for (uint i = 0; i <= (decodeL.Length-subsample); i+= subsample)
             {
@@ -1068,6 +1072,7 @@ namespace SinusLab
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeLast = FftSharp.Transform.FFTmagnitude(audioPart);
+
                     if (decodeLFLuma && superHighQuality)
                     {
                         Array.Copy(decodeForLFLuma, fftMagnitudeLastIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
@@ -1081,6 +1086,9 @@ namespace SinusLab
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
                     fftMagnitudeNext = FftSharp.Transform.FFTmagnitude(audioPart);
+
+                    double[] compareFFT = FFT(audioPart, ref bitReverseSwapTable);
+
                     if (decodeLFLuma && superHighQuality)
                     {
                         Array.Copy(decodeForLFLuma, fftMagnitudeNextIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
@@ -1689,6 +1697,133 @@ namespace SinusLab
                 output[i] = averageHelper.totalValue / averageHelper.multiplier;
             }
             return output;
+        }
+
+        // My own adaption from the FFTSharp function
+        // Original source: https://github.com/swharden/FftSharp/blob/master/src/FftSharp/Transform.cs
+        // My goal here was to have it accept an array as a reference without converting to complex etc etc.
+        public static double[] FFT(double[] buffer, ref int[][] bitReverseSwapTable)
+        {
+
+            double[,] complexBuffer = new double[buffer.Length, 2];
+
+            double[] buffer2 = (double[])buffer.Clone();
+
+            for (int i = 0; i < bitReverseSwapTable.Length; i++)
+            {
+                //bitReverseSwapTable[i][0] is i
+                //bitReverseSwapTable[i][1] is j
+
+                (buffer[bitReverseSwapTable[i][1]], buffer[bitReverseSwapTable[i][0]]) = (buffer[bitReverseSwapTable[i][0]], buffer[bitReverseSwapTable[i][1]]);
+            }
+
+
+            for (int i = 1; i < buffer.Length; i++)
+            {
+                int j = BitReverse(i, buffer2.Length);
+                if (j > i)
+                    (buffer2[j], buffer2[i]) = (buffer2[i], buffer2[j]);
+            }
+
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                complexBuffer[i, 0] = buffer[i];
+            }
+
+            bool[] same = new bool[buffer.Length];
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                same[i] = buffer[i] == buffer2[i];
+            }
+
+            double[] realBuffer = new double[buffer.Length / 2 + 1];
+            
+
+
+            for (int i = 1; i <= buffer.Length / 2; i *= 2)
+            {
+                double mult1 = -Math.PI / i;
+                for (int j = 0; j < buffer.Length; j += (i * 2))
+                {
+                    for (int k = 0; k < i; k++)
+                    {
+                        int evenI = j + k;
+                        int oddI = j + k + i;
+                        //Complex temp = new Complex(Math.Cos(mult1 * k), Math.Sin(mult1 * k));
+                        double[] temp = new double[] { Math.Cos(mult1 * k), Math.Sin(mult1 * k) };
+                        //temp *= buffer[oddI];
+                        //(a.Real * b.Real) - (a.Imaginary * b.Imaginary) // but b (our buffer) has no imaginary part, so the latter part falls away.
+                        // (a.Real * b.Imaginary) + (a.Imaginary * b.Real)) // b has no imaginary so only the latter part applies
+                        (temp[0], temp[1]) = (temp[0] * complexBuffer[oddI, 0] - temp[1] * complexBuffer[oddI, 1], temp[0] * complexBuffer[oddI, 1] + temp[1] * complexBuffer[oddI, 0]);
+                        //temp[0] = temp[0] * complexBuffer[oddI,0]- temp[1] * complexBuffer[oddI, 1];
+                        //temp[1] = temp[0] * complexBuffer[oddI,1] + temp[1] * complexBuffer[oddI, 0];
+                        complexBuffer[oddI,0] = complexBuffer[evenI,0] - temp[0]; //buffer[evenI] - temp;
+                        complexBuffer[oddI,0] = complexBuffer[evenI,1] - temp[1]; //buffer[evenI] - temp;
+                        complexBuffer[evenI, 0] += temp[0];//temp;
+                        complexBuffer[evenI, 1] += temp[1];//temp;
+                    }
+                }
+            }
+
+            /*
+             for (int i = 1; i <= buffer.Length / 2; i *= 2)
+            {
+                double mult1 = -Math.PI / i;
+                for (int j = 0; j < buffer.Length; j += (i * 2))
+                {
+                    for (int k = 0; k < i; k++)
+                    {
+                        int evenI = j + k;
+                        int oddI = j + k + i;
+                        Complex temp = new Complex(Math.Cos(mult1 * k), Math.Sin(mult1 * k));
+                        temp *= buffer[oddI];
+                        buffer[oddI] = buffer[evenI] - temp;
+                        buffer[evenI] += temp;
+                    }
+                }
+            }
+             */
+
+            for (int i = 0; i < realBuffer.Length; i++)
+            {
+                realBuffer[i] = Math.Sqrt(complexBuffer[i,0] * complexBuffer[i, 0] + complexBuffer[i, 1] * complexBuffer[i, 1]);
+            }
+            return realBuffer;
+        }
+
+        private double getFFTMagnitude(double real, double imaginary)
+        {
+            return Math.Sqrt(real * real + imaginary * imaginary);
+        }
+
+        public static int[][] getBitReverseSwapTable(int bufferLength)
+        {
+            List<int[]> swapVal = new List<int[]>();
+            for (int i = 1; i < bufferLength; i++)
+            {
+                int j = BitReverse(i, bufferLength);
+                if (j > i)
+                    swapVal.Add(new int[] { i,j});
+            }
+            return swapVal.ToArray();
+        }
+
+        // This function too is from FFTSharp
+        private static int BitReverse(int value, int maxValue)
+        {
+            int maxBitCount = (int)Math.Log(maxValue, 2);
+            int output = value;
+            int bitCount = maxBitCount - 1;
+
+            value >>= 1;
+            while (value > 0)
+            {
+                output = (output << 1) | (value & 1);
+                bitCount -= 1;
+                value >>= 1;
+            }
+
+            return (output << bitCount) & ((1 << maxBitCount) - 1);
         }
 
     }
