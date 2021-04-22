@@ -1383,7 +1383,7 @@ namespace SinusLab
             if (decodeLFLuma)
             {
                 // Normalize decoded LF luma in case the highest value was over 100. Because that's impossible I think.
-                if(highestLFLumaValue > 100 && (normalizeLFLuma || normalizeSaturation))
+                if (highestLFLumaValue > 100 && (normalizeLFLuma || normalizeSaturation))
                 {
                     double ratio = 100 / highestLFLumaValue;
                     if (normalizeLFLuma)
@@ -1483,11 +1483,11 @@ namespace SinusLab
                     speedReport.logEvent("Luma smoothing.");
                 }
 
-                if(compensationMode == LowFrequencyLumaCompensationMode.MULTIPLY)
+                if (compensationMode == LowFrequencyLumaCompensationMode.MULTIPLY)
                 {
 
-                    double lumaFixRatio;
-                    for (uint i = 0; i <= (decodeL.Length-subsample); i+=subsample)
+                    /*double lumaFixRatio;
+                    for (uint i = 0; i <= (decodeL.Length - subsample); i += subsample)
                     {
 
                         cancelToken.ThrowIfCancellationRequested();
@@ -1498,16 +1498,38 @@ namespace SinusLab
 
                         tmpV = Helpers.CIELChabTosRGB(tmpV);
 
-                        for (uint ii = 0; ii < subsample; ii++){
+                        for (uint ii = 0; ii < subsample; ii++)
+                        {
 
                             decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                             decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
                             decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
                         }
-                    }
-                } else
+                    }*/
+                    Parallel.For(0, (decodeL.Length ) / subsample, (i) =>
+                    {
+                        i *= subsample;
+                        Vector3 tmpVInner;
+                        cancelToken.ThrowIfCancellationRequested();
+                        double lumaFixRatio = smoothedLFLuma[i] / smoothedLuma[i];
+                        tmpVInner.X = (float)(decodeL[i] * lumaFixRatio);
+                        tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                        tmpVInner.Z = (float)decodedH[i];
+
+                        tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+
+                        for (uint ii = 0; ii < subsample; ii++)
+                        {
+
+                            decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpVInner.X));
+                            decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Y));
+                            decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Z));
+                        }
+                    });
+                }
+                else
                 {
-                    double lumaFixOffset;
+                    /*double lumaFixOffset;
                     for (uint i = 0; i <= (decodeL.Length - subsample); i += subsample)
                     {
 
@@ -1529,11 +1551,32 @@ namespace SinusLab
                         //output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                         //output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
                         //output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
-                    }
+                    }*/
+                    Parallel.For(0, (decodeL.Length ) / subsample, (i) =>
+                    {
+                        i *= subsample; // Hack because without this, step can't be set for Parallel.for ... sad. TODO check if this is consistent and doesn't cause issues.
+                        Vector3 tmpVInner;
+                        cancelToken.ThrowIfCancellationRequested();
+                        double lumaFixOffset = smoothedLFLuma[i] - smoothedLuma[i];
+                        tmpVInner.X = (float)(decodeL[i] + lumaFixOffset);
+                        tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                        tmpVInner.Z = (float)decodedH[i];
+
+                        tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+
+                        for (uint ii = 0; ii < subsample; ii++)
+                        {
+
+                            decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpVInner.X));
+                            decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Y));
+                            decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Z));
+                        }
+                    });
                 }
-            } else
+            }
+            else
             {
-                // If LF luma decoding not desired, just ignore.
+                /*// If LF luma decoding not desired, just ignore.
                 for (uint i = 0; i <= (decodeL.Length - subsample); i += subsample)
                 {
 
@@ -1554,7 +1597,29 @@ namespace SinusLab
                     //output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                     //output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
                     //output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
-                }
+                }*/
+                Parallel.For(0, (decodeL.Length ) / subsample, (i) =>
+                {
+                    i *= subsample;
+                    Vector3 tmpVInner;
+                    cancelToken.ThrowIfCancellationRequested();
+                    tmpVInner.X = (float)(decodeL[i]);
+                    tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
+                    tmpVInner.Z = (float)decodedH[i];
+
+                    tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+
+                    for (uint ii = 0; ii < subsample; ii++)
+                    {
+
+                        decodedImage[(i + ii) * 3] = (byte)Math.Min(255, Math.Max(0, tmpVInner.X));
+                        decodedImage[(i + ii) * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Y));
+                        decodedImage[(i + ii) * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpVInner.Z));
+                    }
+                    //output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
+                    //output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
+                    //output[i * 3 + 2] = (byte)Math.Min(255, Math.Max(0, tmpV.Z));
+                });
             }
 
             if (speedReport != null)
