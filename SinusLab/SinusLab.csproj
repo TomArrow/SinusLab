@@ -101,6 +101,7 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="ByteImage.cs" />
+    <Compile Include="FastFFT.cs" />
     <Compile Include="LinearAccessByteImageUnsignedNonVectorized.cs" />
     <Compile Include="SinusLabCore.cs" />
     <Compile Include="SuperWAV.cs" />

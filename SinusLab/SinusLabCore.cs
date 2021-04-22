@@ -1,5 +1,15 @@
 ﻿
-//#define USEMATHNET
+#define USEMATHNET 
+
+
+// 35290 without mathnet (frodo, uhq, nofast)
+// 20020 with mathnet MKL (frodo uhq nofast)
+// 19652 with mathnet MKL  Single (frodo uhq nofast) - not worth it tbh
+// 93121 with mathnet MANAGED (frodo uhq nofast)
+// 2802 with mathnet MKL (frodo fast)
+// 3117 without mathnet  (frodo fast) // I guess most the time at this point is spent with the color conversions. See if we can speed those up.
+// So most meaningful with high dependence on FFT? Not a big gain here
+// Multithreading setting in MKL doesn't change anything really. 
 
 using System;
 using System.Collections.Generic;
@@ -124,7 +134,7 @@ namespace SinusLab
         static class FFTMULTIPLIERS { // These are not yet tested.
             static public float chromaPeakMultiplier = 1.0f/(0.637f / 2f);
             static public double audioAmplitudeMultiplier = 6.0;
-            static public double LFLumaLowQualityMultiplier = 0.63;
+            static public double LFLumaLowQualityMultiplier = 1.85 * 0.63;// The 1.8* is new because now we're measuring the other multiplier differently...
             static public double LFLumaLowQualityMagnitudeMultiplierIndex0 = 1/ 0.05286;
             static public double LFLumaLowQualityMagnitudeMultiplierIndex1 = 1/ 0.098528;
             static public double LFLumaHighQualityMagnitudeMultiplierIndex1 = 1/ 0.16735944031697095;
@@ -134,13 +144,78 @@ namespace SinusLab
         static class FFTMULTIPLIERS { // These are tested
             static public float chromaPeakMultiplier = 1.0f / (0.637f / 2f);
             static public double audioAmplitudeMultiplier = 6.0;
-            static public double LFLumaLowQualityMultiplier = 0.63;
+            static public double LFLumaLowQualityMultiplier = 1.85*0.63; // The 1.8* is new because now we're measuring the other multiplier differently...
             static public double LFLumaLowQualityMagnitudeMultiplierIndex0 = 1 / 0.05286;
             static public double LFLumaLowQualityMagnitudeMultiplierIndex1 = 1 / 0.098528;
             static public double LFLumaHighQualityMagnitudeMultiplierIndex1 = 1 / 0.16735944031697095;
             static public double LFLumaHighQualityMagnitudeMultiplierIndex2 = 1 / 0.13069097631912735;
         }
 #endif
+
+        // This acts as a kind of self-calibration because I want to play around with different FFT libraries and each might have a bit different response.
+        private void calculateFFTMultipliers()
+        {
+            int windowSizeHere = windowSize;//WindowSizeHere;
+            FastFFT myFFT = FastFFT.GetFFT(windowSizeHere);
+            double[] window = FftSharp.Window.Hanning(windowSizeHere); // we make it a bit standardized because we don't want to call the function anew after every config change. Might change that someday tho.
+            AverageHelper avgHelper = new AverageHelper();
+            AverageHelper avgHelper2 = new AverageHelper();
+            
+            // LF Luma low qual
+            double[] tone = generateTone(lumaInChromaFrequencyV2, windowSizeHere * 2);
+            for(int i=0;i< windowSizeHere ; i++)
+            {
+                double[] result = myFFT.FFT(tone, i, windowSizeHere, window);
+                avgHelper.totalValue += result[0];
+                avgHelper2.totalValue += result[1];
+            }
+            FFTMULTIPLIERS.LFLumaLowQualityMagnitudeMultiplierIndex0 = 1/(avgHelper.totalValue / windowSizeHere);
+            FFTMULTIPLIERS.LFLumaLowQualityMagnitudeMultiplierIndex1 = 1/(avgHelper2.totalValue / windowSizeHere);
+
+            // Audio multiplier
+            int audioBin =(int)Math.Round((double)(windowSizeHere/2+1)*(audioSubcarrierFrequencyV3/((double)samplerate / 2.0)));
+            audioBin = Math.Min(audioBin, windowSizeHere / 2-1); // Last bin is broken for some reason..
+            avgHelper = new AverageHelper();
+            tone = generateTone(audioSubcarrierFrequencyV3, windowSizeHere * 2);
+            for (int i = 0; i < windowSizeHere; i++)
+            {
+                double[] result = myFFT.FFT(tone,  i, windowSizeHere, window);
+                avgHelper.totalValue += result[audioBin];
+            }
+            FFTMULTIPLIERS.audioAmplitudeMultiplier = 1 / (avgHelper.totalValue / windowSizeHere);
+
+            // LF Luma super high quality
+            double minimumWindowSizeRequiredForLFLumaCarrierFrequency = (1 / lumaInChromaFrequencyV2 * samplerate);
+            int windowSizeForLFLuma = (int)Math.Pow(2, Math.Ceiling(Math.Log(minimumWindowSizeRequiredForLFLumaCarrierFrequency, 2)));
+            FastFFT LFLumaFFT = FastFFT.GetFFT(windowSizeForLFLuma);
+            tone = generateTone(lumaInChromaFrequencyV2, windowSizeForLFLuma * 2); 
+            double[] windowForLFLuma = FftSharp.Window.Hanning(windowSizeForLFLuma);
+            avgHelper = new AverageHelper();
+            avgHelper2 = new AverageHelper();
+            for (int i = 0; i < windowSizeForLFLuma; i++)
+            {
+                double[] result = LFLumaFFT.FFT(tone,  i, windowSizeForLFLuma, windowForLFLuma);
+                avgHelper.totalValue += result[1];
+                avgHelper2.totalValue += result[2];
+            }
+            FFTMULTIPLIERS.LFLumaHighQualityMagnitudeMultiplierIndex1 = 1 / (avgHelper.totalValue / windowSizeForLFLuma);
+            FFTMULTIPLIERS.LFLumaHighQualityMagnitudeMultiplierIndex2 = 1 / (avgHelper2.totalValue / windowSizeForLFLuma);
+
+            return;
+        }
+
+        private double[] generateTone(double frequency, int length)
+        {
+            double[] retVal = new double[length];
+            double phaseLength = ((double)samplerate) / frequency / 2;
+            double phaseAdvancement = 1 / phaseLength;
+            for (int i = 0; i < length; i++)
+            {
+                retVal[i] = (maxAmplitude / 2) * Math.Sin(((double)phaseAdvancement * (double)i) * Math.PI);
+            }
+            return retVal;
+        }
+
 
         public struct DecodeResult
         {
@@ -160,8 +235,8 @@ namespace SinusLab
         double waveLengthSmoothRadiusMultiplierEncodeV2 = 0.5;
         double waveLengthSmoothRadiusMultiplierDecodeV2 = 4;
         double audioSubcarrierFrequencyV3 = 18000.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
-        double audioSubcarrierFrequencyV3Lower = 18000.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
-        double audioSubcarrierFrequencyV3Upper = 23500.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
+        //double audioSubcarrierFrequencyV3Lower = 18000.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
+        //double audioSubcarrierFrequencyV3Upper = 23500.0; // formerly 23500 - created modulation problems at 48khz // also tried 22000 but its too high for tape sadly. it creates frequencies but they're "fake".
 
         public double AudioSubcarrierFrequencyV3
         {
@@ -269,8 +344,9 @@ namespace SinusLab
             }
 
             Control.UseNativeMKL(); // For MathNet. Make it use MKL.
+            //Control.UseManaged();
 
-
+            calculateFFTMultipliers();
         }
         
         private int WindowSizeHere {
@@ -284,25 +360,6 @@ namespace SinusLab
         private int getWindowSizeHere(double sampleRate)
         {
             return windowSizeIsRelativeTo48k ? (int)Math.Pow(2, Math.Ceiling(Math.Log((double)windowSize * (double)sampleRate / 48000.0, 2.0))) : windowSize;
-        }
-
-        private void calculateFFTMultipliers()
-        {
-            int windowSizeHere = WindowSizeHere;
-            double[] tone = generateTone(lumaInChromaFrequencyV2, WindowSizeHere*2);
-
-        }
-
-        private double[] generateTone(double frequency,int length)
-        {
-            double[] retVal = new double[length];
-            double phaseLength = ((double)samplerate) / frequency / 2;
-            double phaseAdvancement = 1 / phaseLength;
-            for (int i = 0; i < length; i++)
-            {
-                retVal[i] = (maxAmplitude / 2) *  Math.Sin(( (double)phaseAdvancement * (double)i) * Math.PI);
-            }
-            return retVal;
         }
 
 
@@ -543,8 +600,10 @@ namespace SinusLab
 
             byte[] output = new byte[decodeL.Length * 3];
 
-            int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
-            double[] fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+            FastFFT myFFT = FastFFT.GetFFT(windowSizeHere);
+
+            //int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
+            double[] fftMagnitude = myFFT.FFT(audioPart);
             freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
             double tmpMaxIntensity = 0;
@@ -562,7 +621,7 @@ namespace SinusLab
                 //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                 double[] window = FftSharp.Window.GetWindowByName(windowFunction.ToString(), audioPart.Length);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
-                fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+                fftMagnitude = myFFT.FFT(audioPart);
 
                 tmpMaxIntensity = 0;
                 // find biggest frequency
@@ -658,12 +717,15 @@ namespace SinusLab
 
             byte[] output = new byte[decodeL.Length * 3];
 
-            int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
-            int[][] bitReverseSwapTableForLFLuma = getBitReverseSwapTable(windowSizeForLFLuma);
+            FastFFT myFFT = FastFFT.GetFFT(windowSizeHere);
+            FastFFT LFLumaFFT = FastFFT.GetFFT(windowSizeForLFLuma);
+
+            //int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
+            //int[][] bitReverseSwapTableForLFLuma = getBitReverseSwapTable(windowSizeForLFLuma);
 
             double[] audioPart = new double[windowSizeHere];
             double[] freqs;
-            double[] fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+            double[] fftMagnitude = myFFT.FFT(audioPart);
             freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
 
@@ -671,7 +733,7 @@ namespace SinusLab
             // For LF Luma decode
             double[] audioPartForLFLuma = new double[windowSizeForLFLuma];
             double[] freqsForLFLuma;
-            double[] fftMagnitudeForLFLuma = FFT(audioPartForLFLuma,ref bitReverseSwapTableForLFLuma);
+            double[] fftMagnitudeForLFLuma = LFLumaFFT.FFT(audioPartForLFLuma);
             freqsForLFLuma = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitudeForLFLuma.Length);
 
 
@@ -701,13 +763,13 @@ namespace SinusLab
             {
                 Array.Copy(decode, i, audioPart, 0, windowSizeHere);
                 FftSharp.Window.ApplyInPlace(window, audioPart);
-                fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+                fftMagnitude = myFFT.FFT(audioPart);
 
                 if (decodeLFLuma && superHighQuality)
                 {
                     Array.Copy(decodeForLFLuma, i, audioPartForLFLuma, 0, windowSizeForLFLuma);
                     FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
-                    fftMagnitudeForLFLuma = FFT(audioPartForLFLuma,ref bitReverseSwapTableForLFLuma);
+                    fftMagnitudeForLFLuma = LFLumaFFT.FFT(audioPartForLFLuma);
                 }
 
                 tmpMaxIntensity = 0;
@@ -1033,14 +1095,17 @@ namespace SinusLab
 
             byte[] decodedImage = new byte[decodeL.Length * 3];
 
-            int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
-            int[][] bitReverseSwapTableForLFLuma = getBitReverseSwapTable(windowSizeForLFLuma);
-            Vector2[,] sinCosTable = getSinCosTable(windowSizeHere);
-            Vector2[,] sinCosTableForLFLuma = getSinCosTable(windowSizeForLFLuma);
+            FastFFT myFFT = FastFFT.GetFFT(windowSizeHere);
+            FastFFT LFLumaFFT = FastFFT.GetFFT(windowSizeForLFLuma);
+
+            //int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
+            //int[][] bitReverseSwapTableForLFLuma = getBitReverseSwapTable(windowSizeForLFLuma);
+            //Vector2[,] sinCosTable = getSinCosTable(windowSizeHere);
+            //Vector2[,] sinCosTableForLFLuma = getSinCosTable(windowSizeForLFLuma);
 
             double[] audioPart = new double[windowSizeHere];
             double[] freqs;
-            double[] fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+            double[] fftMagnitude = myFFT.FFT(audioPart);
             freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
 
@@ -1066,7 +1131,7 @@ namespace SinusLab
             // For LF Luma decode
             double[] audioPartForLFLuma = new double[windowSizeForLFLuma];
             double[] freqsForLFLuma;
-            double[] fftMagnitudeForLFLuma = FFT(audioPartForLFLuma,ref bitReverseSwapTableForLFLuma);
+            double[] fftMagnitudeForLFLuma = LFLumaFFT.FFT(audioPartForLFLuma);
             freqsForLFLuma = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitudeForLFLuma.Length);
 
 
@@ -1158,13 +1223,13 @@ namespace SinusLab
                     //Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSizeHere);
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     //FftSharp.Window.ApplyInPlace(window, audioPart);
-                    fftMagnitudeLast = FFT(decode, ref bitReverseSwapTable,(int)fftMagnitudeLastIndex,windowSizeHere,window,sinCosTable);
+                    fftMagnitudeLast = myFFT.FFT(decode, (int)fftMagnitudeLastIndex,windowSizeHere,window);
 
                     if (decodeLFLuma && superHighQuality)
                     {
                         //Array.Copy(decodeForLFLuma, fftMagnitudeLastIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
                         //FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
-                        fftMagnitudeLastLFLuma = FFT(decodeForLFLuma, ref bitReverseSwapTableForLFLuma,(int)fftMagnitudeLastIndex, windowSizeForLFLuma, windowForLFLuma,sinCosTableForLFLuma);
+                        fftMagnitudeLastLFLuma = LFLumaFFT.FFT(decodeForLFLuma, (int)fftMagnitudeLastIndex, windowSizeForLFLuma, windowForLFLuma);
                     }
                 }
                 if (fftMagnitudeNext == null)
@@ -1172,14 +1237,14 @@ namespace SinusLab
                     //Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSizeHere);
                     //double[] window = FftSharp.Window.Hanning(audioPart.Length);
                     //FftSharp.Window.ApplyInPlace(window, audioPart);
-                    fftMagnitudeNext = FFT(decode, ref bitReverseSwapTable,(int)fftMagnitudeNextIndex, windowSizeHere, window,sinCosTable);
+                    fftMagnitudeNext = myFFT.FFT(decode, (int)fftMagnitudeNextIndex, windowSizeHere, window);
 
 
                     if (decodeLFLuma && superHighQuality)
                     {
                         //Array.Copy(decodeForLFLuma, fftMagnitudeNextIndex, audioPartForLFLuma, 0, windowSizeForLFLuma);
                         //FftSharp.Window.ApplyInPlace(windowForLFLuma, audioPartForLFLuma);
-                        fftMagnitudeNextLFLuma = FFT(decodeForLFLuma, ref bitReverseSwapTableForLFLuma,(int)fftMagnitudeNextIndex, windowSizeForLFLuma, windowForLFLuma,sinCosTableForLFLuma);
+                        fftMagnitudeNextLFLuma = LFLumaFFT.FFT(decodeForLFLuma,(int)fftMagnitudeNextIndex, windowSizeForLFLuma, windowForLFLuma);
                     }
                 }
                 fftMagnitudeLastIndexPrevious = fftMagnitudeLastIndex;
@@ -1558,9 +1623,10 @@ namespace SinusLab
 
             byte[] output = new byte[decodeL.Length * 3];
 
-            int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
+            FastFFT myFFT = FastFFT.GetFFT(windowSizeHere);
+            //int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
 
-            double[] fftMagnitude = FFT(audioPart,ref bitReverseSwapTable);
+            double[] fftMagnitude = myFFT.FFT(audioPart);
             freqs = FftSharp.Transform.FFTfreq(decodingSampleRate, fftMagnitude.Length);
 
             double tmpMaxIntensity = 0;
@@ -1596,14 +1662,14 @@ namespace SinusLab
                     Array.Copy(decode, fftMagnitudeLastIndex, audioPart, 0, windowSizeHere);
                     double[] window = FftSharp.Window.GetWindowByName(windowFunction.ToString(), audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
-                    fftMagnitudeLast = FFT(audioPart,ref bitReverseSwapTable);
+                    fftMagnitudeLast = myFFT.FFT(audioPart);
                 }
                 if (fftMagnitudeNext == null)
                 {
                     Array.Copy(decode, fftMagnitudeNextIndex, audioPart, 0, windowSizeHere);
                     double[] window = FftSharp.Window.GetWindowByName(windowFunction.ToString(), audioPart.Length);
                     FftSharp.Window.ApplyInPlace(window, audioPart);
-                    fftMagnitudeNext = FFT(audioPart,ref bitReverseSwapTable);
+                    fftMagnitudeNext = myFFT.FFT(audioPart);
                 }
 
                 // Now interpolate
@@ -1789,7 +1855,7 @@ namespace SinusLab
             return output;
         }
 
-
+        /*
         // For backwards compat.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double[] FFT(double[] buffer, ref int[][] bitReverseSwapTable)
@@ -1823,20 +1889,24 @@ namespace SinusLab
         public double[] FFT(double[] buffer, ref int[][] bitReverseSwapTable, int inputBufferStartPosition, int bufferLength, double[] window,Vector2[,] sinCosTable)
         {
 
-#if USEMATHNET // Not using this atm because the results aren't quite right. I think I'm not treating the returned data right or sth...
+#if USEMATHNET // About twice as fast as my attempt
             // Testing MathNet as an alternative.
             //FourierOptions fo = new FourierOptions();
             //fo.
             double[] magnitudes = new double[bufferLength/2+1];
             double[] mathNetBuffer = new double[bufferLength + 2];
-            Array.Copy(buffer, inputBufferStartPosition, mathNetBuffer, 0, bufferLength);
+            //Array.Copy(buffer, inputBufferStartPosition, mathNetBuffer, 0, bufferLength);
+            for (int i = 1; i < bufferLength; i++)
+            {
+                mathNetBuffer[i] = buffer[inputBufferStartPosition+i]*window[i];
+            }
             Fourier.ForwardReal(mathNetBuffer, bufferLength, FourierOptions.NoScaling);
             magnitudes[0] = Math.Sqrt(mathNetBuffer[0] * mathNetBuffer[0] + mathNetBuffer[1] * mathNetBuffer[1]) / bufferLength;
             for (int i = 1; i < magnitudes.Length; i++)
             {
-                magnitudes[i] = 2 / Math.Sqrt(mathNetBuffer[i * 2] * mathNetBuffer[i * 2] + mathNetBuffer[i * 2 + 1] * mathNetBuffer[i * 2 + 1]) / bufferLength;
+                magnitudes[i] = 2 * Math.Sqrt(mathNetBuffer[i * 2] * mathNetBuffer[i * 2] + mathNetBuffer[i * 2 + 1] * mathNetBuffer[i * 2 + 1]) / bufferLength;
             }
-            return mathNetBuffer;
+            return magnitudes;
 
 #else
             // The normal code:
@@ -1879,10 +1949,10 @@ namespace SinusLab
                         //Vector2.Transform(temp,new Matrix3x2() { M11= complexBuffer[oddI].X, M12= -complexBuffer[oddI].Y, M21= complexBuffer[oddI].Y, M22= temp.Y * complexBuffer[oddI].X });// forget about this. wrong values and slow!
                         complexBuffer[oddI] = complexBuffer[evenI] - temp;
                         complexBuffer[evenI] += temp;
-                        /*complexBuffer[oddI,0] = complexBuffer[evenI,0] - temp[0]; //buffer[evenI] - temp;
-                        complexBuffer[oddI,1] = complexBuffer[evenI,1] - temp[1]; //buffer[evenI] - temp;
-                        complexBuffer[evenI, 0] += temp[0];//temp;
-                        complexBuffer[evenI, 1] += temp[1];//temp;*/
+                        //complexBuffer[oddI,0] = complexBuffer[evenI,0] - temp[0]; //buffer[evenI] - temp;
+                        //complexBuffer[oddI,1] = complexBuffer[evenI,1] - temp[1]; //buffer[evenI] - temp;
+                        //complexBuffer[evenI, 0] += temp[0];//temp;
+                        //complexBuffer[evenI, 1] += temp[1];//temp;
                     }
                 }
             }
@@ -1928,7 +1998,7 @@ namespace SinusLab
             }
 
             return (output << bitCount) & ((1 << maxBitCount) - 1);
-        }
+        }*/
 
     }
 }
