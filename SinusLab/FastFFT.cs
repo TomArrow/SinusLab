@@ -19,8 +19,10 @@ namespace SinusLab
         static private Dictionary<int,FastFFT> preCalculatedFFTs = new Dictionary<int,FastFFT>(); 
 
         double[] UNITYWINDOW;
+#if !USEMATHNET
         Vector2[,] sinCosTable;
         int[][] bitReverseSwapTable;
+#endif
 
         // You must instantiate this class using this factory function so FFTs of a given window size aren't unnecessarily repeatedly created.
         public static FastFFT GetFFT(int windowLength)
@@ -45,9 +47,10 @@ namespace SinusLab
                 UNITYWINDOW[i] = 1.0;
             }
 
+#if !USEMATHNET
             sinCosTable = getSinCosTable(windowLength);
             bitReverseSwapTable = getBitReverseSwapTable(windowLength);
-
+#endif
         }
 
         // For backwards compat.

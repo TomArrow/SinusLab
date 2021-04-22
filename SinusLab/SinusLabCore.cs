@@ -130,9 +130,8 @@ namespace SinusLab
                     decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * FFTMULTIPLIERS.LFLumaLowQualityMultiplier * 100 * ((fftMagnitude[0] *LFLumaLowQualityMagnitudeMultiplierIndex0) + (fftMagnitude[1] *LFLumaLowQualityMagnitudeMultiplierIndex1)) / 2;
          */
 
-#if USEMATHNET
-        static class FFTMULTIPLIERS { // These are not yet tested.
-            static public float chromaPeakMultiplier = 1.0f/(0.637f / 2f);
+        static class FFTMULTIPLIERS { // TODO: Make every part of the code use these. Currently it's only used in a few places.
+            static public double chromaPeakMultiplier = 1.0/(0.637 / 2.0);
             static public double audioAmplitudeMultiplier = 6.0;
             static public double LFLumaLowQualityMultiplier = 1.85 * 0.63;// The 1.8* is new because now we're measuring the other multiplier differently...
             static public double LFLumaLowQualityMagnitudeMultiplierIndex0 = 1/ 0.05286;
@@ -140,17 +139,6 @@ namespace SinusLab
             static public double LFLumaHighQualityMagnitudeMultiplierIndex1 = 1/ 0.16735944031697095;
             static public double LFLumaHighQualityMagnitudeMultiplierIndex2 = 1/ 0.13069097631912735;
         }
-#else
-        static class FFTMULTIPLIERS { // These are tested
-            static public float chromaPeakMultiplier = 1.0f / (0.637f / 2f);
-            static public double audioAmplitudeMultiplier = 6.0;
-            static public double LFLumaLowQualityMultiplier = 1.85*0.63; // The 1.8* is new because now we're measuring the other multiplier differently...
-            static public double LFLumaLowQualityMagnitudeMultiplierIndex0 = 1 / 0.05286;
-            static public double LFLumaLowQualityMagnitudeMultiplierIndex1 = 1 / 0.098528;
-            static public double LFLumaHighQualityMagnitudeMultiplierIndex1 = 1 / 0.16735944031697095;
-            static public double LFLumaHighQualityMagnitudeMultiplierIndex2 = 1 / 0.13069097631912735;
-        }
-#endif
 
         // This acts as a kind of self-calibration because I want to play around with different FFT libraries and each might have a bit different response.
         private void calculateFFTMultipliers()
@@ -658,7 +646,7 @@ namespace SinusLab
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/0.707f*100f; //experimental * 4, normally doesnt beong there.
-                tmpV.Y = (float)tmpMaxIntensity *FFTMULTIPLIERS.chromaPeakMultiplier * 100f; //experimental * 4, normally doesnt beong there.
+                tmpV.Y = (float)(tmpMaxIntensity *FFTMULTIPLIERS.chromaPeakMultiplier * 100.0); //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.707f / 2f) * 100f; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.637f * 0.637f) * 100f; //experimental * 4, normally doesnt beong there.
                 tmpV.Z = (float)hue;
@@ -811,17 +799,17 @@ namespace SinusLab
                 //decodedLFLuma[i] = 0.83*100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528))/2;
                 if (superHighQuality)
                 {
-                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 100 * ((fftMagnitudeForLFLuma[1] *FFTMULTIPLIERS.LFLumaHighQualityMagnitudeMultiplierIndex1) + (fftMagnitudeForLFLuma[2] * FFTMULTIPLIERS.LFLumaHighQualityMagnitudeMultiplierIndex2)) / 2;
                 } else
                 {
-                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * 0.6 * 100 * ((fftMagnitude[0] / 0.05286) + (fftMagnitude[1] / 0.098528)) / 2;
+                    decodedLFLuma[i] = decodeLFLumaGainMultiplier / decodeChromaGainMultiplier * FFTMULTIPLIERS.LFLumaLowQualityMultiplier * 100 * ((fftMagnitude[0] * FFTMULTIPLIERS.LFLumaLowQualityMagnitudeMultiplierIndex0) + (fftMagnitude[1] * FFTMULTIPLIERS.LFLumaLowQualityMagnitudeMultiplierIndex1)) / 2;
                 }
 
                 // For Window size 128: [1] is 0.16735944031697095  [2] is 0.13069097631912735
                 //decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735))/2;
                 //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
-                decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
-                decodedH[i] = (float)hue;
+                decodedC[i] = (tmpMaxIntensity * 2.0 * FFTMULTIPLIERS.chromaPeakMultiplier * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
+                decodedH[i] = hue;
                 /*
                 tmpV.X = (float)(decodeL[i]*lumaFixRatio);
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
@@ -1072,7 +1060,10 @@ namespace SinusLab
                     decode[i + windowSizeHere / 2] = decodeChromaGainMultiplier * decodeGainMultiplier * BitConverter.ToSingle(sourceData, i * 4 * 2 + 4);*/
                 }
             }
-
+            if (speedReport != null)
+            {
+                speedReport.logEvent("Filling and creation of most important source arrays.");
+            }
 
 
             double[] outputAudio;
@@ -1169,7 +1160,7 @@ namespace SinusLab
 
             if (speedReport != null)
             {
-                speedReport.logEvent("Initialization.");
+                speedReport.logEvent("Initialization of variables before main loop.");
             }
 
             double highestLFLumaValue = 0;
@@ -1345,8 +1336,8 @@ namespace SinusLab
                 // For Window size 128: [1] is 0.16735944031697095  [2] is 0.13069097631912735
                 //decodedLFLuma[i] = 100 * ((fftMagnitudeForLFLuma[1] / 0.16735944031697095) + (fftMagnitudeForLFLuma[2] / 0.13069097631912735))/2;
                 //decodedLFLuma[i] = 100 * ((fftMagnitude[0] / 0.05286));
-                decodedC[i] = (float)(tmpMaxIntensity * 2.0 / (0.637 / 2.0) * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
-                decodedH[i] = (float)hue;
+                decodedC[i] = (tmpMaxIntensity * 2.0 * FFTMULTIPLIERS.chromaPeakMultiplier * 100.0); // adds a 2x compared to V1 because it was also halved during encoding to avoid clipping
+                decodedH[i] = hue;
 
 
                 // Audio
@@ -1733,7 +1724,7 @@ namespace SinusLab
                 //tmpV.Y = (float)Math.Sqrt(tmpMaxIntensity)*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity*100; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/0.707f*100f; //experimental * 4, normally doesnt beong there.
-                tmpV.Y = (float)tmpMaxIntensity * FFTMULTIPLIERS.chromaPeakMultiplier * 100f; //experimental * 4, normally doesnt beong there.
+                tmpV.Y = (float)(tmpMaxIntensity * FFTMULTIPLIERS.chromaPeakMultiplier * 100.0); //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.707f / 2f) * 100f; //experimental * 4, normally doesnt beong there.
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.637f * 0.637f) * 100f; //experimental * 4, normally doesnt beong there.
                 tmpV.Z = (float)hue;
