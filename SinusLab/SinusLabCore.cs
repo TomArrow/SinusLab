@@ -965,8 +965,8 @@ namespace SinusLab
 
             int[][] bitReverseSwapTable = getBitReverseSwapTable(windowSizeHere);
             int[][] bitReverseSwapTableForLFLuma = getBitReverseSwapTable(windowSizeForLFLuma);
-            double[,][] sinCosTable = getSinCosTable(windowSizeHere);
-            double[,][] sinCosTableForLFLuma = getSinCosTable(windowSizeForLFLuma);
+            Vector2[,] sinCosTable = getSinCosTable(windowSizeHere);
+            Vector2[,] sinCosTableForLFLuma = getSinCosTable(windowSizeForLFLuma);
 
             double[] audioPart = new double[windowSizeHere];
             double[] freqs;
@@ -1727,9 +1727,9 @@ namespace SinusLab
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double[,][] getSinCosTable (int windowSize){
+        public Vector2[,] getSinCosTable (int windowSize){
 
-            double[,][] retVal = new double[windowSize/2+1,windowSize][];
+            Vector2[,] retVal = new Vector2[windowSize/2+1,windowSize];
             for (int i = 1; i <= windowSize / 2; i *= 2)
             {
                 double mult1 = -Math.PI / i;
@@ -1737,7 +1737,7 @@ namespace SinusLab
                 {
                     //double[] temp = new double[] { Math.Cos(mult1 * k), Math.Sin(mult1 * k) };
                     //double[] temp = new double[] { Math.Cos(mult1 * k), Math.Sin(mult1 * k) };
-                    retVal[i, k] = new double[] { Math.Cos(mult1 * k), Math.Sin(mult1 * k) };
+                    retVal[i, k] = new Vector2 { X=(float)Math.Cos(mult1 * k), Y=(float)Math.Sin(mult1 * k) };
                 }
             }
             return retVal;
@@ -1747,32 +1747,29 @@ namespace SinusLab
         // Original source: https://github.com/swharden/FftSharp/blob/master/src/FftSharp/Transform.cs
         // My goal here was to have it accept an array as a reference without converting to complex etc etc.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double[] FFT(double[] buffer, ref int[][] bitReverseSwapTable, int inputBufferStartPosition, int bufferLength, double[] window,double[,][] sinCosTable)
+        public double[] FFT(double[] buffer, ref int[][] bitReverseSwapTable, int inputBufferStartPosition, int bufferLength, double[] window,Vector2[,] sinCosTable)
         {
 
-            double[,] complexBuffer = new double[bufferLength, 2];
-
-            //double[] buffer2 = (double[])buffer.Clone();
-
+            //double[,] complexBuffer = new double[bufferLength, 2];
+            Vector2[] complexBuffer = new Vector2[bufferLength];
 
 
             for (int i = 0, sOffset = inputBufferStartPosition; i < bufferLength; i++, sOffset++)
             {
-                complexBuffer[i, 0] = window[i]*buffer[sOffset];
+                complexBuffer[i].X = (float)(window[i]*buffer[sOffset]);
             }
 
 
             for (int i = 0; i < bitReverseSwapTable.Length; i++)
             {
 
-                (complexBuffer[bitReverseSwapTable[i][1],0], complexBuffer[bitReverseSwapTable[i][0], 0]) = (complexBuffer[bitReverseSwapTable[i][0], 0], complexBuffer[bitReverseSwapTable[i][1], 0]);
+                (complexBuffer[bitReverseSwapTable[i][1]].X, complexBuffer[bitReverseSwapTable[i][0]].X) = (complexBuffer[bitReverseSwapTable[i][0]].X, complexBuffer[bitReverseSwapTable[i][1]].X);
             }
 
 
             double[] realBuffer = new double[bufferLength / 2 + 1];
 
-            //FftSharp.Complex[] toCompare = FftSharp.Transform.MakeComplex(buffer);
-            double[] temp = new double[2];
+            Vector2 temp = new Vector2();
 
             for (int i = 1; i <= bufferLength / 2; i *= 2)
             {
@@ -1783,40 +1780,24 @@ namespace SinusLab
                     {
                         int evenI = j + k;
                         int oddI = j + k + i;
-                        //Complex temp = new Complex(Math.Cos(mult1 * k), Math.Sin(mult1 * k));
-                        //temp = new double[] { Math.Cos(mult1 * k), Math.Sin(mult1 * k) };
-                        (temp[0],temp[1]) = (sinCosTable[i, k][0],sinCosTable[i, k][1]);
-                        (temp[0], temp[1]) = (temp[0] * complexBuffer[oddI, 0] - temp[1] * complexBuffer[oddI, 1], temp[0] * complexBuffer[oddI, 1] + temp[1] * complexBuffer[oddI, 0]);
-                        complexBuffer[oddI,0] = complexBuffer[evenI,0] - temp[0]; //buffer[evenI] - temp;
+                        //(temp[0],temp[1]) = (sinCosTable[i, k][0],sinCosTable[i, k][1]);
+
+                        temp = sinCosTable[i, k];
+                        (temp.X, temp.Y) = (temp.X * complexBuffer[oddI].X - temp.Y * complexBuffer[oddI].Y, temp.X * complexBuffer[oddI].Y + temp.Y * complexBuffer[oddI].X);
+                        complexBuffer[oddI] = complexBuffer[evenI] - temp;
+                        complexBuffer[evenI] += temp;
+                        /*complexBuffer[oddI,0] = complexBuffer[evenI,0] - temp[0]; //buffer[evenI] - temp;
                         complexBuffer[oddI,1] = complexBuffer[evenI,1] - temp[1]; //buffer[evenI] - temp;
                         complexBuffer[evenI, 0] += temp[0];//temp;
-                        complexBuffer[evenI, 1] += temp[1];//temp;
+                        complexBuffer[evenI, 1] += temp[1];//temp;*/
                     }
                 }
             }
 
-            
-             /*for (int i = 1; i <= toCompare.Length / 2; i *= 2)
-            {
-                double mult1 = -Math.PI / i;
-                for (int j = 0; j < toCompare.Length; j += (i * 2))
-                {
-                    for (int k = 0; k < i; k++)
-                    {
-                        int evenI = j + k;
-                        int oddI = j + k + i;
-                        FftSharp.Complex temp = new FftSharp.Complex(Math.Cos(mult1 * k), Math.Sin(mult1 * k));
-                        temp *= toCompare[oddI];
-                        toCompare[oddI] = toCompare[evenI] - temp;
-                        toCompare[evenI] += temp;
-                    }
-                }
-            }*/
-
-            realBuffer[0] = Math.Sqrt(complexBuffer[0, 0] * complexBuffer[0, 0] + complexBuffer[0, 1] * complexBuffer[0, 1]) / bufferLength;
+            realBuffer[0] = Math.Sqrt(complexBuffer[0].X * complexBuffer[0].X + complexBuffer[0].Y * complexBuffer[0].Y) / bufferLength;
             for (int i = 1; i < realBuffer.Length; i++)
             {
-                realBuffer[i] = 2*Math.Sqrt(complexBuffer[i,0] * complexBuffer[i, 0] + complexBuffer[i, 1] * complexBuffer[i, 1])/bufferLength;
+                realBuffer[i] = 2*Math.Sqrt(complexBuffer[i].X * complexBuffer[i].X + complexBuffer[i].Y * complexBuffer[i].Y)/bufferLength;
             }
             return realBuffer;
         }
