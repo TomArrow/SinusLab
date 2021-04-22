@@ -25,6 +25,7 @@
                 <Button x:Name="btnSavePreviewFrame" Click="btnSavePreviewFrame_Click">Save this preview frame</Button>
             </WrapPanel>
             <Image x:Name="previewImg"></Image>
+            <TextBlock x:Name="txtSpeedReport" TextWrapping="Wrap"></TextBlock>
             
         </StackPanel>
         <StackPanel Grid.Column="1">

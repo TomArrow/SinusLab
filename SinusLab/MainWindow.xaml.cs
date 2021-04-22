@@ -1393,6 +1393,7 @@ namespace SinusLab
                         cancellationToken.ThrowIfCancellationRequested();
                     }
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
+                    txtSpeedReport.Text = mySpeedReport.getFormattedList();
                 });
 
                 mySpeedReport.logEvent("Subsampled review drawn.");
@@ -1433,6 +1434,7 @@ namespace SinusLab
                     }
                     previewImg.Source = Helpers.BitmapToImageSource(imgBitmap);
                     imgBitmap.Dispose();
+                    txtSpeedReport.Text = mySpeedReport.getFormattedList();
                 });
                 mySpeedReport.logEvent("Full quality preview drawn.");
                 previewImageSaveSuffix = basePreviewImageSaveSuffix + "_full";

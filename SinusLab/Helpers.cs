@@ -334,6 +334,7 @@ namespace SinusLab
         }
 
         // Most of this color code is lifted from ColorMinePortable and adapted to work with Vector3
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 sRGBToCIELab(Vector3 sRGBInput)
         {
             return XYZToCIELab(sRGBToXYZ(sRGBInput));
@@ -343,16 +344,19 @@ namespace SinusLab
         // CIELChabTosRGB((sRGBToCIELChab(new Vector3(){128,128,128})))
         //
         //
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 sRGBToCIELChab(Vector3 sRGBInput)
         {
             return CIELabToCIELCHab(XYZToCIELab(sRGBToXYZ(sRGBInput)));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 CIELChabTosRGB(Vector3 lchabInput)
         {
             return XYZtoRGB(CIELabToXYZ(CIELCHabToCIELab(lchabInput)));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 CIELabToCIELCHab(Vector3 labInput)
         {
             Vector3 CIELCHabOutput = new Vector3();
@@ -361,6 +365,8 @@ namespace SinusLab
             CIELCHabOutput.Z = (float)Math.Atan2(labInput.Z, labInput.Y);
             return CIELCHabOutput;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 CIELCHabToCIELab(Vector3 CIELCHabInput)
         {
             Vector3 labOutput = new Vector3();
@@ -374,6 +380,7 @@ namespace SinusLab
         static private Matrix4x4 RGBtoXYZMatrix = new Matrix4x4(0.4124f, 0.2126f, 0.0193f, 0, 0.3576f, 0.7152f, 0.1192f, 0, 0.1805f, 0.0722f, 0.9505f, 0, 0, 0, 0, 0);
 
         // TODO Optimize all these a bit.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 sRGBToXYZ(Vector3 sRGBInput)
         {
             Vector3 helper = new Vector3();
@@ -392,11 +399,13 @@ namespace SinusLab
             return sRGBInput;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float PivotRgb(float n)
         {
             return (n > 0.04045f ? (float)Math.Pow((n + 0.055) / 1.055, 2.4) : n / 12.92f) * 100.0f;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 XYZToCIELab(Vector3 XYZInput)
         {
 
@@ -412,17 +421,19 @@ namespace SinusLab
             return XYZInput;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 CIELabTosRGB(Vector3 CIELabInput)
         {
             return XYZtoRGB(CIELabToXYZ(CIELabInput));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float PivotXyz(float n)
         {
             return n > Epsilon ? CubicRoot(n) : (Kappa * n + 16) / 116;
         }
 
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float CubicRoot(float n)
         {
             return (float)Math.Pow(n, 1.0 / 3.0);
@@ -452,6 +463,7 @@ namespace SinusLab
         internal const float Epsilon = 0.008856f; // Intent is 216/24389
         internal const float Kappa = 903.3f; // Intent is 24389/27
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 CIELabToXYZ(Vector3 CIELabInput)
         {
             float y = (CIELabInput.X + 16.0f) / 116.0f;
@@ -472,6 +484,7 @@ namespace SinusLab
 
         static private Matrix4x4 XYZtoRGBMatrix = new Matrix4x4(3.2406f, -0.9689f, 0.0557f, 0, -1.5372f, 1.8758f, -0.2040f, 0, -0.4986f, 0.0415f, 1.0570f, 0, 0, 0, 0, 0);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static public Vector3 XYZtoRGB(Vector3 XYZInput)
         {
             // (Observer = 2°, Illuminant = D65)
