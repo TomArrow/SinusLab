@@ -31,26 +31,34 @@ namespace Experiments
 
         private void test()
         {
-            double sampleRate = 384000;
-            int seconds = 10;
+            //double sampleRate = 384000;
+            double sampleRate = 48000;
+            int seconds = 3000;
             float[] output = new float[(int)sampleRate*seconds];
 
             double frequencyLower = 500;
-            double frequencyUpper = 40000;
+            double frequencyUpper = 1000;
             double frequencyRange = frequencyUpper - frequencyLower;
             double frequencyMiddle = frequencyLower + frequencyRange / 2;
 
-            double lastPhase = 0,phaseHere = 0;
+            double lastPhase = 0,phaseHere = 0, value=0;
 
             double frequencyHere, phaseLengthHere, phaseAdvancementHere;
             for (int i = 0; i < output.Length; i++)
             {
                 //frequencyHere = frequencyLower+Math.Abs((lastPhase%1) - 0.5)*frequencyRange;
-                frequencyHere = frequencyMiddle + ((lastPhase+0.5)%1.0-0.5)*2* Math.Sign(lastPhase)*frequencyRange;
+                //frequencyHere = frequencyMiddle + (lastPhase%1)*Math.Sign(lastPhase)*frequencyRange;
+                // works and is what I wanted but doesnt give the FFT I wanted: frequencyHere = frequencyMiddle + Math.Abs(((lastPhase+0.5)%1.0-0.5)*2)*Math.Sign(lastPhase-1)*frequencyRange/2;
+                //frequencyHere = frequencyMiddle + value * frequencyRange / 2;
+                //frequencyHere = frequencyMiddle + Math.Abs(((lastPhase + 0.5) % 1.0 - 0.5) * 2) * Math.Sign(lastPhase - 1) * frequencyRange / 2;
+                //frequencyHere = i;
+                //frequencyHere = Math.PI*1000*i; // This created perfect white noise!
+                frequencyHere = 3143*i; // Imperfect!
                 phaseLengthHere = sampleRate/ frequencyHere / 2;
                 phaseAdvancementHere = 1 / phaseLengthHere;
                 phaseHere = lastPhase + phaseAdvancementHere;
-                output[i] = (float)(0.5* Math.Sin(phaseHere * Math.PI)); // tmpV.Y is amplitude (chrominance/saturation)
+                value = Math.Sin(phaseHere * Math.PI);
+                output[i] = (float)(0.5 * value); // tmpV.Y is amplitude (chrominance/saturation)
                 lastPhase = phaseHere % 2;
             }
 
