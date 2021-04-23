@@ -955,28 +955,32 @@ namespace SinusLab
                             float[] outputAudioResampled = null;
 
                             // Resample audio if outputSampleRate is different from native one
-                            if(outputSampleRate != outputNativeSampleRate)
+                            if (doDecodeAudio)
                             {
-                                double sampleRateRatio = (double)outputNativeSampleRate / (double)outputSampleRate;
-                                outputAudioResampled = new float[(int)Math.Ceiling((double)outputAudio.Length * outputSampleRate / outputNativeSampleRate)];
 
-
-                                if (outputSampleRate < outputNativeSampleRate)
+                                if(outputSampleRate != outputNativeSampleRate)
                                 {
+                                    double sampleRateRatio = (double)outputNativeSampleRate / (double)outputSampleRate;
+                                    outputAudioResampled = new float[(int)Math.Ceiling((double)outputAudio.Length * outputSampleRate / outputNativeSampleRate)];
 
-                                    uint blurRadius = (uint)Math.Ceiling((double)outputNativeSampleRate / (double)outputSampleRate / 2); //Divided by 2 because radius. 
-                                    outputAudio = core.boxBlurFloat(outputAudio, blurRadius); // TODO find out if we need a bigger blur radius perhaps.
+
+                                    if (outputSampleRate < outputNativeSampleRate)
+                                    {
+
+                                        uint blurRadius = (uint)Math.Ceiling((double)outputNativeSampleRate / (double)outputSampleRate / 2); //Divided by 2 because radius. 
+                                        outputAudio = core.boxBlurFloat(outputAudio, blurRadius); // TODO find out if we need a bigger blur radius perhaps.
                                     
-                                }
-                                for (int i = 0; i < outputAudioResampled.Length; i++) // Nearest neighbor on the smoothed stuff.
+                                    }
+                                    for (int i = 0; i < outputAudioResampled.Length; i++) // Nearest neighbor on the smoothed stuff.
+                                    {
+                                        outputAudioResampled[i] = outputAudio[Math.Min(outputAudio.Length-1,(int)Math.Round((double)i*sampleRateRatio))];
+                                    }
+                                    outputAudio = null;
+                                } else
                                 {
-                                    outputAudioResampled[i] = outputAudio[Math.Min(outputAudio.Length-1,(int)Math.Round((double)i*sampleRateRatio))];
+                                    outputAudioResampled = outputAudio;
+                                    outputAudio = null;
                                 }
-                                outputAudio = null;
-                            } else
-                            {
-                                outputAudioResampled = outputAudio;
-                                outputAudio = null;
                             }
 
 
