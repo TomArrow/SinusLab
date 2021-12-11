@@ -114,7 +114,16 @@ namespace SinusLab
                     });
                 })))(i));
             }*/
-
+            for (int i = 0; i < 3; i++)
+            {
+                int local = i;
+                Task.Run(() => {
+                    Dispatcher.Invoke(() => {
+                        System.Threading.Thread.Sleep(2500);
+                        MessageBox.Show(local.ToString());
+                    });
+                });
+            }
         }
         /*
         public Action blah(int abc)
