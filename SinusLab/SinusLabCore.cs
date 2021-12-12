@@ -234,11 +234,16 @@ namespace SinusLab
             }
         }
 
+        // settings set in GUI: (I think?)
         public double decodeGainMultiplier = 1.0;
         public double decodeChromaGainMultiplier = 1.0;
         public double decodeLumaGainMultiplier = 1.0;
         public double decodeLFLumaGainMultiplier = 1.0;
         public double decodeAudioSubcarrierGainMultiplier = 1.0;
+        public bool inputIsHDR = false;
+        public double inputHDRExposure = 1.0;
+        public bool outputIsHDR = false;
+        public double outputHDRExposure = 1.0;
 
 
         public enum WindowFunction
@@ -368,13 +373,16 @@ namespace SinusLab
             double hueTo0to1Range;
             //output[0] = 0;
             Vector3 tmpV;
+            //Func<Vector3,Vector3> toCIELCHabFunction = inputIsHDR ?  (Func < Vector3, Vector3 > )Helpers.Rec2020ToCIELChab :(Func < Vector3, Vector3 >) Helpers.sRGBToCIELChab;//static public Vector3 Rec2020ToCIELChab(Vector3 sRGBInput)
             for (int i = 0; i < output.Length; i++)
             {
                 tmpV.X = (float)((double)sourceData[i * 3]); // R
                 tmpV.Y = (float)((double)sourceData[i * 3 + 1]);  // G
                 tmpV.Z = (float)((double)sourceData[i * 3 + 2]); // B
 
-                tmpV = Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                //tmpV = Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                //tmpV = toCIELCHabFunction(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                tmpV = inputIsHDR ? Helpers.Rec2020ToCIELChab(tmpV,(float)inputHDRExposure) : Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
 
                 hueTo0to1Range = ((double)tmpV.Z + Math.PI) / Math.PI / 2;
                 frequencyHere = lowerFrequency + frequencyRange * hueTo0to1Range; // Hue
@@ -466,13 +474,16 @@ namespace SinusLab
             double hueTo0to1Range;
             //output[0] = 0;
             Vector3 tmpV;
+            //Func<Vector3, Vector3> toCIELCHabFunction = inputIsHDR ? (Func<Vector3, Vector3>)Helpers.Rec2020ToCIELChab : (Func<Vector3, Vector3>)Helpers.sRGBToCIELChab;//static public Vector3 Rec2020ToCIELChab(Vector3 sRGBInput)
             for (int i = 0; i < output.Length; i++)
             {
                 tmpV.X = (float)((double)sourceData[i * 3]); // R
                 tmpV.Y = (float)((double)sourceData[i * 3 + 1]);  // G
                 tmpV.Z = (float)((double)sourceData[i * 3 + 2]); // B
 
-                tmpV = Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                //tmpV = Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                //tmpV = toCIELCHabFunction(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
+                tmpV = inputIsHDR ? Helpers.Rec2020ToCIELChab(tmpV, (float)inputHDRExposure) : Helpers.sRGBToCIELChab(tmpV); //cielchab = Luma, chroma, hue. hue is frequency, chroma is amplitude
 
                 hueTo0to1Range = ((double)tmpV.Z + Math.PI) / Math.PI / 2;
                 frequencyHere = lowerFrequencyHere + frequencyRange * hueTo0to1Range; // Hue
@@ -651,7 +662,8 @@ namespace SinusLab
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.637f * 0.637f) * 100f; //experimental * 4, normally doesnt beong there.
                 tmpV.Z = (float)hue;
 
-                tmpV = Helpers.CIELChabTosRGB(tmpV);
+                //tmpV = Helpers.CIELChabTosRGB(tmpV);
+                tmpV = outputIsHDR ? Helpers.CIELChabToRec2020(tmpV,(float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpV);
 
                 output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                 output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
@@ -910,7 +922,8 @@ namespace SinusLab
                     tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
                     tmpV.Z = (float)decodedH[i];
 
-                    tmpV = Helpers.CIELChabTosRGB(tmpV);
+                    //tmpV = Helpers.CIELChabTosRGB(tmpV);
+                    tmpV = outputIsHDR ? Helpers.CIELChabToRec2020(tmpV, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpV);
 
                     output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                     output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
@@ -926,7 +939,8 @@ namespace SinusLab
                     tmpV.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
                     tmpV.Z = (float)decodedH[i];
 
-                    tmpV = Helpers.CIELChabTosRGB(tmpV);
+                    //tmpV = Helpers.CIELChabTosRGB(tmpV);
+                    tmpV = outputIsHDR ? Helpers.CIELChabToRec2020(tmpV, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpV);
 
                     output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                     output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));
@@ -1516,7 +1530,8 @@ namespace SinusLab
                         tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
                         tmpVInner.Z = (float)decodedH[i];
 
-                        tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                        //tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                        tmpVInner = outputIsHDR ? Helpers.CIELChabToRec2020(tmpVInner, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpVInner);
 
                         for (uint ii = 0; ii < subsample; ii++)
                         {
@@ -1562,7 +1577,8 @@ namespace SinusLab
                         tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
                         tmpVInner.Z = (float)decodedH[i];
 
-                        tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                        //tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                        tmpVInner = outputIsHDR ? Helpers.CIELChabToRec2020(tmpVInner, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpVInner);
 
                         for (uint ii = 0; ii < subsample; ii++)
                         {
@@ -1607,7 +1623,8 @@ namespace SinusLab
                     tmpVInner.Y = (float)decodedC[i]; //experimental * 4, normally doesnt beong there.
                     tmpVInner.Z = (float)decodedH[i];
 
-                    tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                    //tmpVInner = Helpers.CIELChabTosRGB(tmpVInner);
+                    tmpVInner = outputIsHDR ? Helpers.CIELChabToRec2020(tmpVInner, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpVInner);
 
                     for (uint ii = 0; ii < subsample; ii++)
                     {
@@ -1794,7 +1811,8 @@ namespace SinusLab
                 //tmpV.Y = (float)tmpMaxIntensity/ (0.637f * 0.637f) * 100f; //experimental * 4, normally doesnt beong there.
                 tmpV.Z = (float)hue;
 
-                tmpV = Helpers.CIELChabTosRGB(tmpV);
+                //tmpV = Helpers.CIELChabTosRGB(tmpV);
+                tmpV = outputIsHDR ? Helpers.CIELChabToRec2020(tmpV, (float)outputHDRExposure) : Helpers.CIELChabTosRGB(tmpV);
 
                 output[i * 3] = (byte)Math.Min(255, Math.Max(0, tmpV.X));
                 output[i * 3 + 1] = (byte)Math.Min(255, Math.Max(0, tmpV.Y));

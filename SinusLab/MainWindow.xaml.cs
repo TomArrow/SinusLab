@@ -2,6 +2,8 @@
 
 using Accord.Video.FFMPEG;
 using Microsoft.Win32;
+using SharpAvi;
+using SharpAvi.Codecs;
 using System;
 using System.Collections.Concurrent;
 using System.Drawing;
@@ -48,6 +50,8 @@ namespace SinusLab
 
             cmbFFTWindowFunction.ItemsSource = System.Enum.GetValues(typeof(SinusLabCore.WindowFunction));
             cmbFFTWindowFunction.SelectedItem = core.windowFunction;
+            
+            outputCodec.ItemsSource = Mpeg4VideoEncoderVcm.GetAvailableCodecs(); // TODO Make this actually work and then use SharpAvi for writing...
         }
 
         ~MainWindow()
@@ -1288,6 +1292,10 @@ namespace SinusLab
             core.decodeLumaGainMultiplier = Math.Pow(2,gainSlider_Luma.Value);
             core.decodeChromaGainMultiplier = Math.Pow(2,gainSlider_Chroma.Value);
             core.decodeLFLumaGainMultiplier = Math.Pow(2,gainSlider_LFLuma.Value);
+            core.inputIsHDR = checkInputHDR.IsChecked == true;
+            core.outputIsHDR = checkOutputHDR.IsChecked == true;
+            core.inputHDRExposure = Math.Pow(2,inputHDR_Exposure.Value);
+            core.outputHDRExposure = Math.Pow(2,outputHDR_Exposure.Value);
             core.windowFunction = (SinusLabCore.WindowFunction)cmbFFTWindowFunction.SelectedItem;
             int tmpSampleRate;
             bool success = int.TryParse(txtEncodeAndRawSampleRate.Text, out tmpSampleRate);
@@ -1649,6 +1657,46 @@ namespace SinusLab
 
             updateSettings();
             redrawPreview();
+        }
+
+        private void checkInputHDR_Checked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void checkInputHDR_Unchecked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void inputHDR_Exposure_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+        private void checkOutputHDR_Checked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void checkOutputHDR_Unchecked(object sender, RoutedEventArgs e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void outputHDR_Exposure_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            updateSettings();
+            redrawPreview();
+        }
+
+        private void outputCodec_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            updateSettings();
         }
     }
 }

@@ -349,11 +349,19 @@ namespace SinusLab
         {
             return CIELabToCIELCHab(XYZToCIELab(sRGBToXYZ(sRGBInput)));
         }
+        static public Vector3 Rec2020ToCIELChab(Vector3 sRGBInput,float exposure)
+        {
+            return CIELabToCIELCHab(XYZToCIELab(Rec2020ToXYZ(sRGBInput,exposure)));
+        }
 
 
         static public Vector3 CIELChabTosRGB(Vector3 lchabInput)
         {
             return XYZtoRGB(CIELabToXYZ(CIELCHabToCIELab(lchabInput)));
+        }
+        static public Vector3 CIELChabToRec2020(Vector3 lchabInput,float exposure)
+        {
+            return XYZtoRec2020(CIELabToXYZ(CIELCHabToCIELab(lchabInput)),exposure);
         }
 
 
@@ -378,6 +386,7 @@ namespace SinusLab
 
         //static private Matrix4x4 RGBtoXYZMatrix = new Matrix4x4(0.4124f,0.3576f,0.1805f,0,0.2126f,0.7152f,0.0722f,0,0.0193f,0.1192f,0.9505f,0,0,0,0,0);
         static private Matrix4x4 RGBtoXYZMatrix = new Matrix4x4(0.4124f, 0.2126f, 0.0193f, 0, 0.3576f, 0.7152f, 0.1192f, 0, 0.1805f, 0.0722f, 0.9505f, 0, 0, 0, 0, 0);
+        static private Matrix4x4 Rec2020toXYZMatrix = new Matrix4x4(0.637f, 0.2627f, 0f, 0, 0.1446f, 0.678f, 0.0281f, 0, 0.1689f, 0.0593f, 1.061f, 0, 0, 0, 0, 0);
 
         // TODO Optimize all these a bit.
 
@@ -398,11 +407,48 @@ namespace SinusLab
 
             return sRGBInput;
         }
+        static public Vector3 Rec2020ToXYZ(Vector3 rec2020Input,float exposure)
+        {
+            Vector3 helper = new Vector3();
+            helper.X = LinearizePQ(rec2020Input.X / 255.0f) * 100.0f;
+            helper.Y = LinearizePQ(rec2020Input.Y / 255.0f) * 100.0f;
+            helper.Z = LinearizePQ(rec2020Input.Z / 255.0f) * 100.0f;
+
+            helper *= exposure*100; // 100 has a specific meaning here. peak is 10000 nits but we aim for 100 nits as 1.0f
+
+            // Observer. = 2°, Illuminant = D65
+            /*
+            sRGBInput.X = r * 0.4124f + g * 0.3576f + b * 0.1805f;
+            sRGBInput.Y = r * 0.2126f + g * 0.7152f + b * 0.0722f;
+            sRGBInput.Z = r * 0.0193f + g * 0.1192f + b * 0.9505f;
+            */
+            rec2020Input = Vector3.Transform(helper, Rec2020toXYZMatrix);
+
+            return rec2020Input;
+        }
 
 
         private static float PivotRgb(float n)
         {
             return (n > 0.04045f ? (float)Math.Pow((n + 0.055) / 1.055, 2.4) : n / 12.92f) * 100.0f;
+        }
+
+        const float m1 = 1305.0f / 8192.0f;
+        const float m2 = 2523.0f / 32.0f;
+        const float c1 = 107.0f / 128.0f;
+        const float c2 = 2413.0f / 128.0f;
+        const float c3 = 2392.0f / 128.0f;
+        private static float LinearizePQ(float n)
+        {
+            return (float)Math.Pow(
+                (Math.Max(Math.Pow(n,1/m2)-c1,0))
+                /
+                (c2-c3*Math.Pow(n,1/m2))
+                ,1/m1);
+        }
+        private static float ApplyPQ(float n)
+        {
+            return (float)Math.Pow((c1 + c2 * Math.Pow(n, m1)) / (1 + c3 * Math.Pow(n, m1)), m2);
         }
 
 
@@ -483,6 +529,7 @@ namespace SinusLab
         }
 
         static private Matrix4x4 XYZtoRGBMatrix = new Matrix4x4(3.2406f, -0.9689f, 0.0557f, 0, -1.5372f, 1.8758f, -0.2040f, 0, -0.4986f, 0.0415f, 1.0570f, 0, 0, 0, 0, 0);
+        static private Matrix4x4 XYZtoRec2020Matrix = new Matrix4x4(1.7167f, -0.6667f, 0.0176f, 0, -0.3557f, 1.6165f, -0.0428f, 0, -0.2534f, 0.0158f, 0.9421f, 0, 0, 0, 0, 0);
 
 
         static public Vector3 XYZtoRGB(Vector3 XYZInput)
@@ -503,6 +550,19 @@ namespace SinusLab
             XYZInput.Y = XYZInput.Y > 0.0031308f ? 1.055f * (float)Math.Pow(XYZInput.Y, 1 / 2.4) - 0.055f : 12.92f * XYZInput.Y;
             XYZInput.Z = XYZInput.Z > 0.0031308f ? 1.055f * (float)Math.Pow(XYZInput.Z, 1 / 2.4) - 0.055f : 12.92f * XYZInput.Z;
 
+            return XYZInput * 255.0f;
+        }
+        static public Vector3 XYZtoRec2020(Vector3 XYZInput,float exposure)
+        {
+
+            XYZInput = Vector3.Transform(XYZInput / 100.0f, XYZtoRec2020Matrix);
+
+            XYZInput *= exposure/ 100;
+
+            XYZInput.X = ApplyPQ( XYZInput.X);
+            XYZInput.Y = ApplyPQ( XYZInput.Y);
+            XYZInput.Z = ApplyPQ( XYZInput.Z);
+            
             return XYZInput * 255.0f;
         }
 

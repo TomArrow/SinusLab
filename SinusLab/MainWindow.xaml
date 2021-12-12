@@ -221,6 +221,46 @@
 
                                     </StackPanel>
                                 </TabItem>
+                                <TabItem Header="HDR">
+
+                                    <StackPanel>
+                                        <GroupBox Header="Input">
+
+                                            <StackPanel>
+                                                <CheckBox x:Name="checkInputHDR" Checked="checkInputHDR_Checked" Unchecked="checkInputHDR_Unchecked">Input is HDR</CheckBox>
+                                                <Label>Exposure adjustment (log 2 scale)</Label>
+                                                <WrapPanel>
+                                                    <Slider x:Name="inputHDR_Exposure" Width="110" Minimum="-5" Maximum="5" Value="{Binding ElementName=inputHDR_ExposureText, Path=Text}" ValueChanged="inputHDR_Exposure_ValueChanged"></Slider>
+                                                    <TextBox x:Name="inputHDR_ExposureText" Width="30" Text="{Binding ElementName=inputHDR_Exposure, Path=Value}"></TextBox>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </GroupBox>
+                                        <GroupBox Header="Output">
+
+                                            <StackPanel>
+                                                <CheckBox x:Name="checkOutputHDR" Checked="checkOutputHDR_Checked" Unchecked="checkOutputHDR_Unchecked">Output is HDR</CheckBox>
+                                                <Label>Exposure adjustment (log 2 scale)</Label>
+                                                <WrapPanel>
+                                                    <Slider x:Name="outputHDR_Exposure" Width="110" Minimum="-5" Maximum="5" Value="{Binding ElementName=outputHDR_ExposureText, Path=Text}" ValueChanged="outputHDR_Exposure_ValueChanged"></Slider>
+                                                    <TextBox x:Name="outputHDR_ExposureText" Width="30" Text="{Binding ElementName=outputHDR_Exposure, Path=Value}"></TextBox>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </GroupBox>
+                                    </StackPanel>
+                                </TabItem>
+                                <TabItem Header="IO">
+                                    <StackPanel>
+                                        <Label>Output codec</Label>
+                                        <ComboBox x:Name="outputCodec" SelectionChanged="outputCodec_SelectionChanged">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}"></TextBlock>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                    </StackPanel>
+                                </TabItem>
                             </TabControl>
 
                             
