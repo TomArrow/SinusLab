@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SinusLab", "SinusLab\SinusL
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Experiments", "Experiments\Experiments.csproj", "{3E3A9661-D588-464E-9218-B87C2F924676}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ASIOLongFileLoopbackApplicator", "ASIOLongFileLoopbackApplicator\ASIOLongFileLoopbackApplicator.csproj", "{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,6 +33,14 @@ Global
 		{3E3A9661-D588-464E-9218-B87C2F924676}.Release|Any CPU.Build.0 = Release|Any CPU
 		{3E3A9661-D588-464E-9218-B87C2F924676}.Release|x64.ActiveCfg = Release|Any CPU
 		{3E3A9661-D588-464E-9218-B87C2F924676}.Release|x64.Build.0 = Release|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Debug|x64.Build.0 = Debug|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Release|x64.ActiveCfg = Release|Any CPU
+		{10D6678A-6F6D-42B8-AC52-F6C92D61A9E6}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
