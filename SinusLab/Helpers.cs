@@ -34,6 +34,7 @@ namespace SinusLab
             ObserveAll();
         }
 
+
         public FullyObservableCollection(IEnumerable<T> enumerable) : base(enumerable)
         {
             ObserveAll();
@@ -129,6 +130,19 @@ namespace SinusLab
 
     static class Helpers
     {
+
+        // width is in pixels;
+        static public byte[] FlipBGR24Image(byte[] input, int width)
+        {
+            int height = input.Length / 3 / width;
+            byte[] output = new byte[input.Length];
+            for(int i = 0; i < height; i++)
+            {
+                Array.Copy(input,i*width*3,output,(height-1-i)*width*3,width*3);
+            }
+            return output;
+        }
+
 
         // from: https://stackoverflow.com/a/33307903
         static public unsafe bool EqualBytesLongUnrolled(byte[] data1, byte[] data2)

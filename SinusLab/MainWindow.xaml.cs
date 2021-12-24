@@ -4,6 +4,7 @@ using Accord.Video.FFMPEG;
 using Microsoft.Win32;
 using SharpAvi;
 using SharpAvi.Codecs;
+using SharpAvi.Output;
 using System;
 using System.Collections.Concurrent;
 using System.Drawing;
@@ -741,6 +742,12 @@ namespace SinusLab
             w64ToVideo();
         }
 
+        enum WriterType { 
+            FFMPEG,
+            SHARPAVI
+        }
+        const WriterType writerType = WriterType.SHARPAVI;
+
         private void w64ToVideo(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY,bool superHighQuality = false)
         {
             if(videoReferenceFrame == null)
@@ -775,7 +782,9 @@ namespace SinusLab
                         break;
                 }
 
-                sfd.FileName = ofd.FileName + ".sinuslab.audiotorgb24"+ suffix + ".mkv";
+                string ext = writerType == WriterType.SHARPAVI ? ".avi" : ".mkv";
+
+                sfd.FileName = ofd.FileName + ".sinuslab.audiotorgb24"+ suffix + ext;
                 if (sfd.ShowDialog() == true)
                 {
 
@@ -789,10 +798,30 @@ namespace SinusLab
                             //float[] srcData = wavFile.getEntireFileAs32BitFloat();
                             //srcDataByte = new byte[srcData.Length * 4];
                             //Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
-                        
-                            VideoFileWriter writer = new VideoFileWriter();
-                            writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
 
+                            VideoFileWriter writer;
+                            AviWriter aviWriter;
+                            IAviVideoStream aviStream;
+                            if (writerType == WriterType.FFMPEG)
+                            {
+                                writer = new VideoFileWriter();
+                                writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
+                            } else if(writerType == WriterType.SHARPAVI)
+                            {
+                                aviWriter = new AviWriter(sfd.FileName)
+                                {
+                                    FramesPerSecond = (decimal)videoFrameRate.Numerator / (decimal)videoFrameRate.Denominator,
+                                    // Emitting AVI v1 index in addition to OpenDML index (AVI v2)
+                                    // improves compatibility with some software, including 
+                                    // standard Windows programs like Media Player and File Explorer
+                                    EmitIndex1 = true
+                                };
+                                aviStream = aviWriter.AddVideoStream();
+                                aviStream.Width = videoReferenceFrame.width;
+                                aviStream.Height = videoReferenceFrame.height;
+                                aviStream.Codec = KnownFourCCs.Codecs.Uncompressed;
+                                aviStream.BitsPerPixel = BitsPerPixel.Bpp24;
+                            }
                             /*
                             Console.WriteLine("width:  " + reader.Width);
                             Console.WriteLine("height: " + reader.Height);
@@ -835,17 +864,37 @@ namespace SinusLab
                                         break;
                                 }
                                 //output = fast ? core.StereoToRGB24Fast(srcDataByte, sampleRate) : core.StereoToRGB24(srcDataByte, sampleRate);
-                                image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
-                                imgBitmap = Helpers.ByteArrayToBitmap(image);
-                                writer.WriteVideoFrame(imgBitmap,(uint)i);
-                                writer.Flush();
+                                
+                                if (writerType == WriterType.FFMPEG)
+                                {
+                                    image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                                    imgBitmap = Helpers.ByteArrayToBitmap(image);
+                                    writer.WriteVideoFrame(imgBitmap, (uint)i);
+                                    writer.Flush();
+                                }
+                                else if (writerType == WriterType.SHARPAVI)
+                                {
+                                    byte[] flippedOutput = Helpers.FlipBGR24Image(output, videoReferenceFrame.width);
+                                    aviStream.WriteFrame(true, // is key frame? (many codecs use concept of key frames, for others - all frames are keys)
+                                        flippedOutput, // array with frame data
+                                        0, // starting index in the array
+                                        output.Length);
+                                }
                                 /*if (currentFrame % 1000 == 0)
                                 {
                                     progress.Report("Saving video: " + i + "/" + frameCount + " frames");
                                 }*/
                             }
 
-                            writer.Close();
+                            if (writerType == WriterType.FFMPEG)
+                            {
+
+                                writer.Close();
+                            }
+                            else if (writerType == WriterType.SHARPAVI)
+                            {
+                                aviWriter.Close();
+                            }
                         }
 #if !DEBUG
                     }
@@ -859,6 +908,12 @@ namespace SinusLab
             }
         }
         
+        struct OutputFrame
+        {
+            public Bitmap bmp;
+            public byte[] raw;
+        }
+
         private async void w64ToVideoMultiThreadedAsync(bool fast = false,SinusLabCore.FormatVersion formatVersion = SinusLabCore.FormatVersion.DEFAULT_LEGACY,bool superHighQuality = false)
         {
             if(videoReferenceFrame == null)
@@ -906,9 +961,9 @@ namespace SinusLab
                         suffix = "V1";
                         break;
                 }
-                
 
-                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+suffix+".mkv";
+                string ext = writerType == WriterType.SHARPAVI ? ".avi" : ".mkv";
+                sfd.FileName = ofd.FileName + ".sinuslab.32flaudiotorgb24"+suffix+ ext;
                 if (sfd.ShowDialog() == true)
                 {
 
@@ -925,7 +980,7 @@ namespace SinusLab
                         }
                     }
 
-                    ConcurrentDictionary<int, Bitmap> writeBuffer = new ConcurrentDictionary<int, Bitmap>();
+                    ConcurrentDictionary<int, OutputFrame> writeBuffer = new ConcurrentDictionary<int, OutputFrame>();
                     ConcurrentDictionary<int, float[]> writeBufferAudio = new ConcurrentDictionary<int, float[]>();
                     bool[] imagesProcessed = new bool[1];
                     bool[] imagesProcessing = new bool[1];
@@ -1000,12 +1055,16 @@ namespace SinusLab
 
                             srcDataByte = null;
                             LinearAccessByteImageUnsignedNonVectorized image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
-                            Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
+                            OutputFrame outputFrame = new OutputFrame();
+                            outputFrame.raw = output;
+                            outputFrame.bmp = Helpers.ByteArrayToBitmap(image);
+                            //Bitmap imgBitmap = Helpers.ByteArrayToBitmap(image);
                             image = null;
                             bool addingSucceeded = false;
                             while (!addingSucceeded)
                             {
-                                addingSucceeded = writeBuffer.TryAdd(index, imgBitmap); 
+                                //addingSucceeded = writeBuffer.TryAdd(index, imgBitmap); 
+                                addingSucceeded = writeBuffer.TryAdd(index, outputFrame); 
                                 System.Threading.Thread.Sleep(mainLoopTimeout);
                             }
                             addingSucceeded = false;
@@ -1017,7 +1076,8 @@ namespace SinusLab
                                 }
                             }
                             //writeBuffer.Add(index, imgBitmap);
-                            imgBitmap = null;
+                            outputFrame.bmp= null;
+                            outputFrame.raw= null;
                             imagesProcessing[index] = false;
                             imagesProcessed[index] = true;
                         });
@@ -1037,10 +1097,31 @@ namespace SinusLab
                             //float[] srcData = wavFile.getEntireFileAs32BitFloat();
                             //srcDataByte = new byte[srcData.Length * 4];
                             //Buffer.BlockCopy(srcData, 0, srcDataByte, 0, srcDataByte.Length);
-
-                            VideoFileWriter writer = new VideoFileWriter();
-                            writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
-
+                            VideoFileWriter writer;
+                            AviWriter aviWriter;
+                            IAviVideoStream aviStream;
+                            if (writerType == WriterType.FFMPEG)
+                            {
+                                writer = new VideoFileWriter();
+                                writer.Open(sfd.FileName, videoReferenceFrame.width, videoReferenceFrame.height, videoFrameRate, VideoCodec.FFV1);
+                            }
+                            else if (writerType == WriterType.SHARPAVI)
+                            {
+                                aviWriter = new AviWriter(sfd.FileName)
+                                {
+                                    FramesPerSecond = (decimal)videoFrameRate.Numerator / (decimal)videoFrameRate.Denominator,
+                                    // Emitting AVI v1 index in addition to OpenDML index (AVI v2)
+                                    // improves compatibility with some software, including 
+                                    // standard Windows programs like Media Player and File Explorer
+                                    EmitIndex1 = true
+                                };
+                                aviStream = aviWriter.AddVideoStream();
+                                aviStream.Width = videoReferenceFrame.width;
+                                aviStream.Height = videoReferenceFrame.height;
+                                aviStream.Codec = KnownFourCCs.Codecs.Uncompressed;
+                                aviStream.BitsPerPixel = BitsPerPixel.Bpp24;
+                            }
+                            
                             /*
                             Console.WriteLine("width:  " + reader.Width);
                             Console.WriteLine("height: " + reader.Height);
@@ -1080,7 +1161,8 @@ namespace SinusLab
 
                             Int64 lastFrameWrittenIntoVideo = -1;
 
-                            Bitmap tmpBitmap;
+                            //Bitmap tmpBitmap;
+                            OutputFrame tmpOutputFrame;
 
 
                             UInt64 audioSampleHandleSize = imageLength / 2;
@@ -1139,7 +1221,8 @@ namespace SinusLab
                                     UInt64 nextFrameToBeWritten = (UInt64)(lastFrameWrittenIntoVideo + 1);
                                     if (imagesProcessed[nextFrameToBeWritten] && writeBuffer.ContainsKey((int)nextFrameToBeWritten) && (!doDecodeAudio | writeBufferAudio.ContainsKey((int)nextFrameToBeWritten)))
                                     {
-                                        bool readingSucceeded = writeBuffer.TryRemove((int)nextFrameToBeWritten,out tmpBitmap); // We're using remove here because that returns a bitmap whether we want to or not anyway...
+                                        //bool readingSucceeded = writeBuffer.TryRemove((int)nextFrameToBeWritten,out tmpBitmap); // We're using remove here because that returns a bitmap whether we want to or not anyway...
+                                        bool readingSucceeded = writeBuffer.TryRemove((int)nextFrameToBeWritten,out tmpOutputFrame); // We're using remove here because that returns a bitmap whether we want to or not anyway...
                                         if (!readingSucceeded)
                                         {
                                             framesAvailable = false;
@@ -1156,22 +1239,72 @@ namespace SinusLab
                                                 {
                                                     outputAudioFile.writeFloatArrayFast(audioData, (UInt64)(outputSamplesPerVideoFrame * (double)nextFrameToBeWritten));
                                                     audioData = null;
-                                                    writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
-                                                    tmpBitmap.Dispose();
-                                                    tmpBitmap = null;
+
+                                                    if (writerType == WriterType.FFMPEG)
+                                                    {
+
+                                                        //writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                                        writer.WriteVideoFrame(tmpOutputFrame.bmp, (uint)nextFrameToBeWritten);
+                                                        //image = new LinearAccessByteImageUnsignedNonVectorized(output, videoReferenceFrame);
+                                                        //imgBitmap = Helpers.ByteArrayToBitmap(image);
+                                                        // writer.WriteVideoFrame(imgBitmap, (uint)i);
+                                                        //writer.Flush();
+
+                                                    }
+                                                    else if (writerType == WriterType.SHARPAVI)
+                                                    {
+                                                        byte[] flippedOutput = Helpers.FlipBGR24Image(tmpOutputFrame.raw, videoReferenceFrame.width);
+                                                        aviStream.WriteFrame(true, // is key frame? (many codecs use concept of key frames, for others - all frames are keys)
+                                                            flippedOutput, // array with frame data
+                                                            0, // starting index in the array
+                                                            flippedOutput.Length);
+                                                    }
+
+                                                    //tmpBitmap.Dispose();
+                                                    //tmpBitmap = null;
+                                                    tmpOutputFrame.bmp.Dispose();
+                                                    tmpOutputFrame.bmp = null;
+                                                    tmpOutputFrame.raw = null;
+
                                                     lastFrameWrittenIntoVideo++;
                                                     imagesLeft--;
-                                                    writer.Flush();
+                                                    if (writerType == WriterType.FFMPEG)
+                                                    {
+                                                        writer.Flush();
+                                                    }
                                                 }
                                             } else
                                             {
+                                                if (writerType == WriterType.FFMPEG)
+                                                {
+                                                    writer.WriteVideoFrame(tmpOutputFrame.bmp, (uint)nextFrameToBeWritten);
+                                                    
+                                                }
+                                                else if (writerType == WriterType.SHARPAVI)
+                                                {
+                                                    byte[] flippedOutput = Helpers.FlipBGR24Image(tmpOutputFrame.raw, videoReferenceFrame.width);
+                                                    aviStream.WriteFrame(true, // is key frame? (many codecs use concept of key frames, for others - all frames are keys)
+                                                        flippedOutput, // array with frame data
+                                                        0, // starting index in the array
+                                                        flippedOutput.Length);
+                                                }
 
-                                                writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
-                                                tmpBitmap.Dispose();
-                                                tmpBitmap = null;
+                                                //tmpBitmap.Dispose();
+                                                //tmpBitmap = null;
+                                                tmpOutputFrame.bmp.Dispose();
+                                                tmpOutputFrame.bmp = null;
+                                                tmpOutputFrame.raw = null;
+
+
+                                                //writer.WriteVideoFrame(tmpBitmap, (uint)nextFrameToBeWritten);
+                                                //tmpBitmap.Dispose();
+                                                //tmpBitmap = null;
                                                 lastFrameWrittenIntoVideo++;
                                                 imagesLeft--;
-                                                writer.Flush();
+                                                if (writerType == WriterType.FFMPEG)
+                                                {
+                                                    writer.Flush();
+                                                }
                                             }
                                         }
 
@@ -1203,7 +1336,15 @@ namespace SinusLab
                                 outputAudioFile.Dispose();
                             }
 
-                            writer.Close();
+                            if (writerType == WriterType.FFMPEG)
+                            {
+
+                                writer.Close();
+                            }
+                            else if (writerType == WriterType.SHARPAVI)
+                            {
+                                aviWriter.Close();
+                            }
                         }
 #if !DEBUG
                     }
